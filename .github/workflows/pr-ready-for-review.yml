@@ -1,0 +1,107 @@
+name: Move PR to Review when ready
+
+on:
+  pull_request:
+    types: [ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  move-to-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move PR to Review in Project v2
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PERSONAL_TOKEN }}
+          script: |
+            const owner = "Yoshiki0418";        // 個人アカウント
+            const projectNumber = 8;            // GraphQL Explorerで確認済み
+            const statusFieldName = "Status";   // Projectの列フィールド名
+            const statusValueName = "Review";   // 移動したい列名
+
+            const prId = context.payload.pull_request.node_id;
+
+            // === ① Project ID を取得 ===
+            const projectData = await github.graphql(
+              `query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                  }
+                }
+              }`,
+              { owner: owner, number: projectNumber }
+            );
+
+            if (!projectData.user || !projectData.user.projectV2) {
+              throw new Error(`❌ Project number ${projectNumber} が見つかりません。owner=${owner}`);
+            }
+
+            const projectId = projectData.user.projectV2.id;
+            console.log(`✅ Project ID: ${projectId}`);
+
+            // === ② PR を Project に追加 ===
+            const addRes = await github.graphql(
+              `mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                  item { id }
+                }
+              }`,
+              { projectId: projectId, contentId: prId }
+            );
+
+            const itemId = addRes.addProjectV2ItemById.item.id;
+            console.log(`✅ Added PR to Project, item ID: ${itemId}`);
+
+            // === ③ Status フィールドと選択肢を取得 ===
+            const fieldRes = await github.graphql(
+              `query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { projectId: projectId }
+            );
+
+            const statusField = fieldRes.node.fields.nodes.find(f => f.name === statusFieldName);
+            if (!statusField) throw new Error(`❌ Statusフィールド '${statusFieldName}' が見つかりません`);
+            const option = statusField.options.find(o => o.name === statusValueName);
+            if (!option) throw new Error(`❌ ステータス値 '${statusValueName}' が見つかりません`);
+
+            // === ④ ステータス更新 ===
+            await github.graphql(
+              `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $itemId,
+                  fieldId: $fieldId,
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }`,
+              {
+                projectId: projectId,
+                itemId: itemId,
+                fieldId: statusField.id,
+                optionId: option.id
+              }
+            );
+
+            console.log(`✅ PRを '${statusValueName}' カラムに移動しました`);
