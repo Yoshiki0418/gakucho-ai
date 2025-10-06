@@ -1,0 +1,28 @@
+name: Move Issue to In Progress on branch creation
+
+on:
+  create:
+    branches:
+      - '*'
+
+jobs:
+  move-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract issue number from branch name
+        id: extract
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ([0-9]+) ]]; then
+            echo "ISSUE_NUMBER=${BASH_REMATCH[1]}" >> $GITHUB_ENV
+          fi
+
+      - name: Move linked issue to In Progress
+        if: env.ISSUE_NUMBER != ''
+        uses: peter-evans/update-project-item@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          project-url: https://github.com/users/Yoshiki0418/projects/8
+          item-type: issue
+          item-number: ${{ env.ISSUE_NUMBER }}
+          field: Status
+          value: In Progress

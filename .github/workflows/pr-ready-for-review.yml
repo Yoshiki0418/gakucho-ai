@@ -1,0 +1,19 @@
+name: Move PR to Review when ready
+
+on:
+  pull_request:
+    types: [ready_for_review]
+
+jobs:
+  move-to-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move PR to Review
+        uses: peter-evans/update-project-item@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          project-url: https://github.com/users/Yoshiki0418/projects/8
+          item-type: pull-request
+          item-number: ${{ github.event.pull_request.number }}
+          field: Status
+          value: Review
