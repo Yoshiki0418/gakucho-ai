@@ -11,7 +11,7 @@ jobs:
       - name: Move PR to Review in Project v2
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_PERSONAL_TOKEN }}
           script: |
             // ✅ ここで明示的に定義（nullになるのを防ぐ）
             const owner = "Yoshiki0418";
