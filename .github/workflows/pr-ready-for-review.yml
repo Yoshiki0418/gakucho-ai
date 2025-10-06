@@ -13,43 +13,47 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const projectNumber = 8; // ← あなたのプロジェクト番号
-            const owner = "Yoshiki0418"; // ← あなたのユーザー or org 名
-            const statusFieldName = "Status"; // ← プロジェクトのフィールド名
-            const statusValueName = "Review"; // ← 移動先のカラム名
+            // ✅ ここで明示的に定義（nullになるのを防ぐ）
+            const owner = "Yoshiki0418";
+            const projectNumber = 8;
+            const statusFieldName = "Status";
+            const statusValueName = "Review";
 
-            // 1. PR ID を取得
+            // PR Node ID
             const prId = context.payload.pull_request.node_id;
 
-            // 2. プロジェクトIDを取得
-            const projectData = await github.graphql(`
-              query($owner: String!, $number: Int!) {
+            // Project ID 取得
+            const projectData = await github.graphql(
+              `query($owner: String!, $number: Int!) {
                 user(login: $owner) {
                   projectV2(number: $number) {
                     id
                   }
                 }
-              }
-            `, { owner, number: projectNumber });
+              }`,
+              { owner: owner, number: projectNumber }
+            );
 
             const projectId = projectData.user.projectV2.id;
+            console.log(`✅ Project ID: ${projectId}`);
 
-            // 3. PR をプロジェクトに追加（まだ追加されてなければ）
-            const itemData = await github.graphql(`
-              mutation($projectId: ID!, $contentId: ID!) {
+            // ProjectにPRを追加
+            const itemData = await github.graphql(
+              `mutation($projectId: ID!, $contentId: ID!) {
                 addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
                   item {
                     id
                   }
                 }
-              }
-            `, { projectId, contentId: prId });
+              }`,
+              { projectId: projectId, contentId: prId }
+            );
 
             const itemId = itemData.addProjectV2ItemById.item.id;
 
-            // 4. StatusフィールドのIDと選択肢IDを取得
-            const fields = await github.graphql(`
-              query($projectId: ID!) {
+            // StatusフィールドのIDと選択肢取得
+            const fields = await github.graphql(
+              `query($projectId: ID!) {
                 node(id: $projectId) {
                   ... on ProjectV2 {
                     fields(first: 20) {
@@ -66,8 +70,9 @@ jobs:
                     }
                   }
                 }
-              }
-            `, { projectId });
+              }`,
+              { projectId: projectId }
+            );
 
             const statusField = fields.node.fields.nodes.find(f => f.name === statusFieldName);
             if (!statusField) throw new Error(`Status field '${statusFieldName}' not found`);
@@ -75,9 +80,9 @@ jobs:
             const option = statusField.options.find(o => o.name === statusValueName);
             if (!option) throw new Error(`Status value '${statusValueName}' not found`);
 
-            // 5. ステータスを「Review」に更新
-            await github.graphql(`
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+            // ステータス更新
+            await github.graphql(
+              `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
                   projectId: $projectId,
                   itemId: $itemId,
@@ -88,12 +93,13 @@ jobs:
                     id
                   }
                 }
+              }`,
+              {
+                projectId: projectId,
+                itemId: itemId,
+                fieldId: statusField.id,
+                optionId: option.id
               }
-            `, {
-              projectId,
-              itemId,
-              fieldId: statusField.id,
-              optionId: option.id
-            });
+            );
 
             console.log(`✅ Moved PR to '${statusValueName}' in Project ${projectNumber}`);
