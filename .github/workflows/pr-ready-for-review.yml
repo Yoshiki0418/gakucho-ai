@@ -4,6 +4,12 @@ on:
   pull_request:
     types: [ready_for_review]
 
+# 👇 これが超重要（PATでも権限の宣言は必要）
+permissions:
+  contents: read
+  pull-requests: write
+  projects: write
+
 jobs:
   move-to-review:
     runs-on: ubuntu-latest
@@ -11,18 +17,17 @@ jobs:
       - name: Move PR to Review in Project v2
         uses: actions/github-script@v7
         with:
+          # 👇 個人 Project の場合は PAT を使う！
           github-token: ${{ secrets.GH_PERSONAL_TOKEN }}
           script: |
-            // ✅ ここで明示的に定義（nullになるのを防ぐ）
-            const owner = "Yoshiki0418";
-            const projectNumber = 8;
-            const statusFieldName = "Status";
-            const statusValueName = "Review";
+            const owner = "Yoshiki0418";        // 個人アカウント
+            const projectNumber = 8;            // GraphQL Explorerで確認済み
+            const statusFieldName = "Status";   // Projectの列フィールド名
+            const statusValueName = "Review";   // 移動したい列名
 
-            // PR Node ID
             const prId = context.payload.pull_request.node_id;
 
-            // Project ID 取得
+            // === ① Project ID を取得 ===
             const projectData = await github.graphql(
               `query($owner: String!, $number: Int!) {
                 user(login: $owner) {
@@ -34,29 +39,32 @@ jobs:
               { owner: owner, number: projectNumber }
             );
 
+            if (!projectData.user || !projectData.user.projectV2) {
+              throw new Error(`❌ Project number ${projectNumber} が見つかりません。owner=${owner}`);
+            }
+
             const projectId = projectData.user.projectV2.id;
             console.log(`✅ Project ID: ${projectId}`);
 
-            // ProjectにPRを追加
-            const itemData = await github.graphql(
+            // === ② PR を Project に追加 ===
+            const addRes = await github.graphql(
               `mutation($projectId: ID!, $contentId: ID!) {
                 addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-                  item {
-                    id
-                  }
+                  item { id }
                 }
               }`,
               { projectId: projectId, contentId: prId }
             );
 
-            const itemId = itemData.addProjectV2ItemById.item.id;
+            const itemId = addRes.addProjectV2ItemById.item.id;
+            console.log(`✅ Added PR to Project, item ID: ${itemId}`);
 
-            // StatusフィールドのIDと選択肢取得
-            const fields = await github.graphql(
+            // === ③ Status フィールドと選択肢を取得 ===
+            const fieldRes = await github.graphql(
               `query($projectId: ID!) {
                 node(id: $projectId) {
                   ... on ProjectV2 {
-                    fields(first: 20) {
+                    fields(first: 50) {
                       nodes {
                         ... on ProjectV2SingleSelectField {
                           id
@@ -74,13 +82,12 @@ jobs:
               { projectId: projectId }
             );
 
-            const statusField = fields.node.fields.nodes.find(f => f.name === statusFieldName);
-            if (!statusField) throw new Error(`Status field '${statusFieldName}' not found`);
-
+            const statusField = fieldRes.node.fields.nodes.find(f => f.name === statusFieldName);
+            if (!statusField) throw new Error(`❌ Statusフィールド '${statusFieldName}' が見つかりません`);
             const option = statusField.options.find(o => o.name === statusValueName);
-            if (!option) throw new Error(`Status value '${statusValueName}' not found`);
+            if (!option) throw new Error(`❌ ステータス値 '${statusValueName}' が見つかりません`);
 
-            // ステータス更新
+            // === ④ ステータス更新 ===
             await github.graphql(
               `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
@@ -89,9 +96,7 @@ jobs:
                   fieldId: $fieldId,
                   value: { singleSelectOptionId: $optionId }
                 }) {
-                  projectV2Item {
-                    id
-                  }
+                  projectV2Item { id }
                 }
               }`,
               {
@@ -102,4 +107,4 @@ jobs:
               }
             );
 
-            console.log(`✅ Moved PR to '${statusValueName}' in Project ${projectNumber}`);
+            console.log(`✅ PRを '${statusValueName}' カラムに移動しました`);
