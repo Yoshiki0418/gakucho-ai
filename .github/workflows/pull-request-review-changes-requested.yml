@@ -1,0 +1,135 @@
+name: Move linked Issue to In Progress on code changes requested
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  move-linked-issue-to-in-progress:
+    if: github.event.review.state == 'changes_requested'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move linked Issue to In Progress
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PERSONAL_TOKEN }} # Project v2 操作用 PAT
+          script: |
+            const owner = "Yoshiki0418";
+            const projectNumber = 8;
+            const statusFieldName = "Status";
+            const statusValueName = "In Progress";
+
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            console.log(`📝 PR #${prNumber} に対して「修正依頼」が出されました`);
+
+            // --- ① PRの本文またはタイトルから Issue 番号を抽出 ---
+            const issueMatch = pr.body?.match(/#(\d+)/) || pr.title?.match(/#(\d+)/);
+            if (!issueMatch) {
+              console.log("⚠️ 対応する Issue が見つかりませんでした。処理をスキップします。");
+              return;
+            }
+            const issueNumber = parseInt(issueMatch[1], 10);
+            console.log(`🔗 対応する Issue #${issueNumber} を検出`);
+
+            // --- ② Project ID を取得 ---
+            const projectData = await github.graphql(
+              `query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                  }
+                }
+              }`,
+              { owner, number: projectNumber }
+            );
+
+            const projectId = projectData.user?.projectV2?.id;
+            if (!projectId) throw new Error(`❌ Project number ${projectNumber} が見つかりません`);
+
+            // --- ③ Issue の Node ID を取得 ---
+            const issueData = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) {
+                    id
+                  }
+                }
+              }`,
+              { owner, repo: context.repo.repo, number: issueNumber }
+            );
+
+            const issueId = issueData.repository?.issue?.id;
+            if (!issueId) {
+              console.log(`⚠️ Issue #${issueNumber} が見つかりませんでした`);
+              return;
+            }
+
+            // --- ④ Issue を Project に追加（未追加の場合のみ） ---
+            const addRes = await github.graphql(
+              `mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                  item { id }
+                }
+              }`,
+              { projectId, contentId: issueId }
+            );
+
+            const itemId = addRes.addProjectV2ItemById.item.id;
+            console.log(`✅ Project Item ID: ${itemId}`);
+
+            // --- ⑤ Status フィールドとオプションを取得 ---
+            const fieldRes = await github.graphql(
+              `query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { projectId }
+            );
+
+            const statusField = fieldRes.node.fields.nodes.find(f => f.name === statusFieldName);
+            if (!statusField) throw new Error(`❌ Status フィールド '${statusFieldName}' が見つかりません`);
+
+            const option = statusField.options.find(o => o.name === statusValueName);
+            if (!option) throw new Error(`❌ ステータス値 '${statusValueName}' が見つかりません`);
+
+            // --- ⑥ ステータスを In Progress に更新 ---
+            await github.graphql(
+              `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $itemId,
+                  fieldId: $fieldId,
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }`,
+              {
+                projectId,
+                itemId,
+                fieldId: statusField.id,
+                optionId: option.id
+              }
+            );
+
+            console.log(`🔄 Issue #${issueNumber} を '${statusValueName}' カラムに戻しました`);
