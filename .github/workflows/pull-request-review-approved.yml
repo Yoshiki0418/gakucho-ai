@@ -1,8 +1,8 @@
-name: Move linked Issue to Review when PR is marked ready
+name: Move linked Issue to Ready to Merge on PR approval
 
 on:
-  pull_request:
-    types: [ready_for_review]
+  pull_request_review:
+    types: [submitted]
 
 permissions:
   contents: read
@@ -10,24 +10,25 @@ permissions:
   issues: read
 
 jobs:
-  move-linked-issue-to-review:
+  move-linked-issue-to-ready-to-merge:
+    if: github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     steps:
-      - name: Move linked Issue to Review in Project v2
+      - name: Move linked Issue to Ready to Merge
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_PERSONAL_TOKEN }} # PAT を利用（Project v2 操作用）
+          github-token: ${{ secrets.GH_PERSONAL_TOKEN }} # Project v2 操作用 PAT
           script: |
-            const owner = "Yoshiki0418";      // アカウント名
-            const projectNumber = 8;          // 対象の Project 番号
+            const owner = "Yoshiki0418";    // アカウント名
+            const projectNumber = 8;        // 対象の Project 番号
             const statusFieldName = "Status";
-            const statusValueName = "Review";
+            const statusValueName = "Ready to Merge";
 
             const pr = context.payload.pull_request;
             const prNumber = pr.number;
-            console.log(`📌 PR #${prNumber} が Ready for Review になりました`);
+            console.log(`✅ PR #${prNumber} がレビューで承認されました`);
 
-            // --- ① PR本文またはタイトルから Issue 番号を抽出 ---
+            // --- ① PRの本文またはタイトルから Issue 番号を抽出 ---
             const issueMatch = pr.body?.match(/#(\d+)/) || pr.title?.match(/#(\d+)/);
             if (!issueMatch) {
               console.log("⚠️ 対応する Issue が見つかりませんでした。処理をスキップします。");
@@ -50,8 +51,6 @@ jobs:
 
             const projectId = projectData.user?.projectV2?.id;
             if (!projectId) throw new Error(`❌ Project number ${projectNumber} が見つかりません`);
-
-            console.log(`✅ Project ID: ${projectId}`);
 
             // --- ③ Issue の Node ID を取得 ---
             const issueData = await github.graphql(
@@ -84,7 +83,7 @@ jobs:
             const itemId = addRes.addProjectV2ItemById.item.id;
             console.log(`✅ Project Item ID: ${itemId}`);
 
-            // --- ⑤ Project の Status フィールドと選択肢を取得 ---
+            // --- ⑤ Status フィールドとオプションを取得 ---
             const fieldRes = await github.graphql(
               `query($projectId: ID!) {
                 node(id: $projectId) {
@@ -113,7 +112,7 @@ jobs:
             const option = statusField.options.find(o => o.name === statusValueName);
             if (!option) throw new Error(`❌ ステータス値 '${statusValueName}' が見つかりません`);
 
-            // --- ⑥ ステータスを Review に更新 ---
+            // --- ⑥ ステータスを Ready to Merge に更新 ---
             await github.graphql(
               `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
@@ -133,4 +132,4 @@ jobs:
               }
             );
 
-            console.log(`✅ Issue #${issueNumber} を '${statusValueName}' カラムに移動しました`);
+            console.log(`🚀 Issue #${issueNumber} を '${statusValueName}' カラムに移動しました`);
