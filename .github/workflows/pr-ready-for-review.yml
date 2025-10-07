@@ -1,4 +1,4 @@
-name: Move PR to Review when ready
+name: Move linked Issue to Review when PR is marked ready
 
 on:
   pull_request:
@@ -6,25 +6,37 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
+  issues: read
 
 jobs:
-  move-to-review:
+  move-linked-issue-to-review:
     runs-on: ubuntu-latest
     steps:
-      - name: Move PR to Review in Project v2
+      - name: Move linked Issue to Review in Project v2
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_PERSONAL_TOKEN }}
+          github-token: ${{ secrets.GH_PERSONAL_TOKEN }} # PAT を利用（Project v2 操作用）
           script: |
-            const owner = "Yoshiki0418";        // 個人アカウント
-            const projectNumber = 8;            // GraphQL Explorerで確認済み
-            const statusFieldName = "Status";   // Projectの列フィールド名
-            const statusValueName = "Review";   // 移動したい列名
+            const owner = "Yoshiki0418";      // アカウント名
+            const projectNumber = 8;          // 対象の Project 番号
+            const statusFieldName = "Status";
+            const statusValueName = "Review";
 
-            const prId = context.payload.pull_request.node_id;
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            console.log(`📌 PR #${prNumber} が Ready for Review になりました`);
 
-            // === ① Project ID を取得 ===
+            // --- ① PR本文またはタイトルから Issue 番号を抽出 ---
+            const issueMatch = pr.body?.match(/#(\d+)/) || pr.title?.match(/#(\d+)/);
+            if (!issueMatch) {
+              console.log("⚠️ 対応する Issue が見つかりませんでした。処理をスキップします。");
+              return;
+            }
+            const issueNumber = parseInt(issueMatch[1], 10);
+            console.log(`🔗 対応する Issue #${issueNumber} を検出`);
+
+            // --- ② Project ID を取得 ---
             const projectData = await github.graphql(
               `query($owner: String!, $number: Int!) {
                 user(login: $owner) {
@@ -33,30 +45,46 @@ jobs:
                   }
                 }
               }`,
-              { owner: owner, number: projectNumber }
+              { owner, number: projectNumber }
             );
 
-            if (!projectData.user || !projectData.user.projectV2) {
-              throw new Error(`❌ Project number ${projectNumber} が見つかりません。owner=${owner}`);
-            }
+            const projectId = projectData.user?.projectV2?.id;
+            if (!projectId) throw new Error(`❌ Project number ${projectNumber} が見つかりません`);
 
-            const projectId = projectData.user.projectV2.id;
             console.log(`✅ Project ID: ${projectId}`);
 
-            // === ② PR を Project に追加 ===
+            // --- ③ Issue の Node ID を取得 ---
+            const issueData = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) {
+                    id
+                  }
+                }
+              }`,
+              { owner, repo: context.repo.repo, number: issueNumber }
+            );
+
+            const issueId = issueData.repository?.issue?.id;
+            if (!issueId) {
+              console.log(`⚠️ Issue #${issueNumber} が見つかりませんでした`);
+              return;
+            }
+
+            // --- ④ Issue を Project に追加（未追加の場合のみ） ---
             const addRes = await github.graphql(
               `mutation($projectId: ID!, $contentId: ID!) {
-                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
                   item { id }
                 }
               }`,
-              { projectId: projectId, contentId: prId }
+              { projectId, contentId: issueId }
             );
 
             const itemId = addRes.addProjectV2ItemById.item.id;
-            console.log(`✅ Added PR to Project, item ID: ${itemId}`);
+            console.log(`✅ Project Item ID: ${itemId}`);
 
-            // === ③ Status フィールドと選択肢を取得 ===
+            // --- ⑤ Project の Status フィールドと選択肢を取得 ---
             const fieldRes = await github.graphql(
               `query($projectId: ID!) {
                 node(id: $projectId) {
@@ -76,15 +104,16 @@ jobs:
                   }
                 }
               }`,
-              { projectId: projectId }
+              { projectId }
             );
 
             const statusField = fieldRes.node.fields.nodes.find(f => f.name === statusFieldName);
-            if (!statusField) throw new Error(`❌ Statusフィールド '${statusFieldName}' が見つかりません`);
+            if (!statusField) throw new Error(`❌ Status フィールド '${statusFieldName}' が見つかりません`);
+
             const option = statusField.options.find(o => o.name === statusValueName);
             if (!option) throw new Error(`❌ ステータス値 '${statusValueName}' が見つかりません`);
 
-            // === ④ ステータス更新 ===
+            // --- ⑥ ステータスを Review に更新 ---
             await github.graphql(
               `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
@@ -97,11 +126,11 @@ jobs:
                 }
               }`,
               {
-                projectId: projectId,
-                itemId: itemId,
+                projectId,
+                itemId,
                 fieldId: statusField.id,
                 optionId: option.id
               }
             );
 
-            console.log(`✅ PRを '${statusValueName}' カラムに移動しました`);
+            console.log(`✅ Issue #${issueNumber} を '${statusValueName}' カラムに移動しました`);

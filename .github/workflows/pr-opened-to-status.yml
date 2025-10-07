@@ -1,4 +1,4 @@
-name: Set PR status on creation (Draft → In Progress / Ready → Review)
+name: Sync Issue status when PR is created (Draft → In Progress / Ready → Review)
 
 on:
   pull_request:
@@ -7,15 +7,16 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  issues: read
 
 jobs:
-  set-pr-status:
+  sync-issue-status:
     runs-on: ubuntu-latest
     steps:
-      - name: Set Project v2 status based on PR type
+      - name: Sync Issue status with PR draft state
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_PERSONAL_TOKEN }} # Project v2 操作用のPAT
+          github-token: ${{ secrets.GH_PERSONAL_TOKEN }}
           script: |
             const owner = "Yoshiki0418";
             const projectNumber = 8;
@@ -24,12 +25,19 @@ jobs:
             const reviewStatusValue = "Review";
 
             const pr = context.payload.pull_request;
-            const prId = pr.node_id;
             const prNumber = pr.number;
-
             console.log(`📌 PR #${prNumber} が作成されました（Draft: ${pr.draft}）`);
 
-            // --- ① Project ID を取得 ---
+            // --- ① PR 本文から Issue 番号を抽出 (#15 のようなもの) ---
+            const issueMatch = pr.body?.match(/#(\d+)/) || pr.title?.match(/#(\d+)/);
+            if (!issueMatch) {
+              console.log("⚠️ 関連する Issue が見つかりません。処理をスキップします。");
+              return;
+            }
+            const issueNumber = parseInt(issueMatch[1], 10);
+            console.log(`🔗 関連 Issue #${issueNumber} を検出`);
+
+            // --- ② Project ID を取得 ---
             const projectData = await github.graphql(
               `query($owner: String!, $number: Int!) {
                 user(login: $owner) {
@@ -42,26 +50,35 @@ jobs:
             );
 
             const projectId = projectData.user?.projectV2?.id;
-            if (!projectId) {
-              throw new Error(`❌ Project number ${projectNumber} が見つかりません`);
-            }
+            if (!projectId) throw new Error(`❌ Project number ${projectNumber} が見つかりません`);
             console.log(`✅ Project ID: ${projectId}`);
 
-            // --- ② PR を Project に追加 ---
-            const addRes = await github.graphql(
+            // --- ③ Issue の Node ID を取得 ---
+            const issueData = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) {
+                    id
+                  }
+                }
+              }`,
+              { owner, repo: context.repo.repo, number: issueNumber }
+            );
+            const issueId = issueData.repository.issue.id;
+
+            // --- ④ Project 内の Issue アイテムを追加（存在しない場合のみ） ---
+            const addItemRes = await github.graphql(
               `mutation($projectId: ID!, $contentId: ID!) {
                 addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
                   item { id }
                 }
               }`,
-              { projectId, contentId: prId }
+              { projectId, contentId: issueId }
             );
+            const itemId = addItemRes.addProjectV2ItemById.item.id;
 
-            const itemId = addRes.addProjectV2ItemById.item.id;
-            console.log(`✅ Project Item ID: ${itemId}`);
-
-            // --- ③ StatusフィールドのIDとオプションを取得 ---
-            const fieldRes = await github.graphql(
+            // --- ⑤ Status フィールドとオプション取得 ---
+            const fieldsRes = await github.graphql(
               `query($projectId: ID!) {
                 node(id: $projectId) {
                   ... on ProjectV2 {
@@ -83,15 +100,14 @@ jobs:
               { projectId }
             );
 
-            const statusField = fieldRes.node.fields.nodes.find(f => f.name === statusFieldName);
+            const statusField = fieldsRes.node.fields.nodes.find(f => f.name === statusFieldName);
             if (!statusField) throw new Error(`❌ Status フィールド '${statusFieldName}' が見つかりません`);
 
-            // Draftかどうかでステータス値を選択
             const targetStatusName = pr.draft ? draftStatusValue : reviewStatusValue;
-            const targetOption = statusField.options.find(o => o.name === targetStatusName);
-            if (!targetOption) throw new Error(`❌ ステータス値 '${targetStatusName}' が見つかりません`);
+            const option = statusField.options.find(o => o.name === targetStatusName);
+            if (!option) throw new Error(`❌ ステータス値 '${targetStatusName}' が見つかりません`);
 
-            // --- ④ ステータス更新 ---
+            // --- ⑥ ステータス更新 ---
             await github.graphql(
               `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
                 updateProjectV2ItemFieldValue(input: {
@@ -107,8 +123,8 @@ jobs:
                 projectId,
                 itemId,
                 fieldId: statusField.id,
-                optionId: targetOption.id
+                optionId: option.id
               }
             );
 
-            console.log(`✅ PR #${prNumber} のステータスを '${targetStatusName}' に設定しました ✅`);
+            console.log(`✅ Issue #${issueNumber} のステータスを '${targetStatusName}' に更新しました`);

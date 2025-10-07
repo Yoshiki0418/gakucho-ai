@@ -1,4 +1,4 @@
-name: Move PR back to In Progress when converted to draft
+name: Move linked Issue to In Progress when PR converted to draft
 
 on:
   pull_request:
@@ -7,27 +7,37 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  issues: read
 
 jobs:
-  move-to-in-progress:
+  move-issue-to-in-progress:
     runs-on: ubuntu-latest
     steps:
-      - name: Move Draft PR to In Progress in Project v2
+      - name: Update linked Issue status to In Progress
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_PERSONAL_TOKEN }} # PAT を使用（Project v2 操作用）
+          github-token: ${{ secrets.GH_PERSONAL_TOKEN }}
           script: |
             const owner = "Yoshiki0418";
             const projectNumber = 8;
             const statusFieldName = "Status";
             const statusValueName = "In Progress";
 
-            // PR Node ID
-            const prId = context.payload.pull_request.node_id;
-            const prNumber = context.payload.pull_request.number;
-            console.log(`🔄 PR #${prNumber} を Draft に戻したので 'In Progress' に遷移します`);
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
 
-            // --- ① Project IDを取得 ---
+            console.log(`🔄 PR #${prNumber} が Draft に戻されました。対応する Issue を 'In Progress' に戻します`);
+
+            // --- ① PRタイトル or 本文から Issue番号 を抽出 ---
+            const issueMatch = pr.body?.match(/#(\d+)/) || pr.title?.match(/#(\d+)/);
+            if (!issueMatch) {
+              console.log("⚠️ 対応する Issue が見つかりませんでした。スキップします。");
+              return;
+            }
+            const issueNumber = parseInt(issueMatch[1], 10);
+            console.log(`🔗 Issue #${issueNumber} を検出`);
+
+            // --- ② Project ID を取得 ---
             const projectData = await github.graphql(
               `query($owner: String!, $number: Int!) {
                 user(login: $owner) {
@@ -38,28 +48,34 @@ jobs:
               }`,
               { owner, number: projectNumber }
             );
+            const projectId = projectData.user?.projectV2?.id;
+            if (!projectId) throw new Error(`❌ Project ${projectNumber} が見つかりません`);
 
-            if (!projectData.user || !projectData.user.projectV2) {
-              throw new Error(`❌ Project number ${projectNumber} が見つかりません`);
-            }
+            // --- ③ Issue の Node ID を取得 ---
+            const issueData = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) {
+                    id
+                  }
+                }
+              }`,
+              { owner, repo: context.repo.repo, number: issueNumber }
+            );
+            const issueId = issueData.repository.issue.id;
 
-            const projectId = projectData.user.projectV2.id;
-            console.log(`✅ Project ID: ${projectId}`);
-
-            // --- ② PR を Project に追加（未登録なら） ---
+            // --- ④ Issue を Project に追加（なければ） ---
             const addRes = await github.graphql(
               `mutation($projectId: ID!, $contentId: ID!) {
-                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
                   item { id }
                 }
               }`,
-              { projectId, contentId: prId }
+              { projectId, contentId: issueId }
             );
-
             const itemId = addRes.addProjectV2ItemById.item.id;
-            console.log(`✅ Project Item ID: ${itemId}`);
 
-            // --- ③ Status フィールドを "In Progress" に変更 ---
+            // --- ⑤ Status フィールドを In Progress に更新 ---
             const fieldRes = await github.graphql(
               `query($projectId: ID!) {
                 node(id: $projectId) {
@@ -99,12 +115,7 @@ jobs:
                   projectV2Item { id }
                 }
               }`,
-              {
-                projectId,
-                itemId,
-                fieldId: statusField.id,
-                optionId: option.id
-              }
+              { projectId, itemId, fieldId: statusField.id, optionId: option.id }
             );
 
-            console.log(`✅ PR #${prNumber} のステータスを '${statusValueName}' に戻しました ✅`);
+            console.log(`✅ Issue #${issueNumber} のステータスを '${statusValueName}' に更新しました`);
