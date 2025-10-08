@@ -1,18 +1,40 @@
-// import React, { useState } from 'react'
+'use client'
 
-// // ❌ 型エラー（暗黙の any）
-// // ❌ 不要なanyの使用
-// // ❌ 関数名がlowercaseではない
-// export default function page(props) {
+import Button from '@/components/atoms/Button'
 
-// console.log("Lint error test")  // ❌ no-console, ❌ セミコロンなし
+export default function HomePage() {
+  return (
+    <main
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+      }}
+    >
+      <h1>Button Variants Demo</h1>
 
-//     const unused = 123    // ❌ 未使用変数
-//     if (true) 
-//     {console.log("Bad formatting")}  // ❌ 波括弧とインデント崩れ
+      {/* Primaryボタン */}
+      <Button $variants="Primary" onClick={() => alert('Primary clicked!')}>
+        Primary
+      </Button>
 
-//   return <div>
-//   <h1 >  Lint Test Page </h1>  {/* ❌ 余分なスペース・フォーマット */}
-// <p>this should trigger multiple lint errors</p>
-// </div>
-// }
+      {/* Toggleボタン（アクティブ・非アクティブ両方） */}
+      <Button $variants="Toggle" $isactive>
+        Active Toggle
+      </Button>
+      <Button $variants="Toggle" $isactive={false}>
+        Inactive Toggle
+      </Button>
+
+      {/* Iconボタン（仮の中身） */}
+      <Button $variants="Icon">
+        <span role="img" aria-label="star">
+          ⭐
+        </span>
+      </Button>
+    </main>
+  )
+}
