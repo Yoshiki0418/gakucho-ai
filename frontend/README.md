@@ -25,26 +25,29 @@ frontend/
 そのため、各メンバーはローカル環境で依存関係をインストールする必要があります。
 
 ① 依存関係のインストール
+```
 npm install
+```
 
 ② 開発サーバーの起動
+```
 npm run dev
-
+```
 
 ブラウザで http://localhost:3000
  を開くと、トップページが表示されます。
 
 ## 💡 開発メモ
 
-環境変数：
-.env ファイルはGit管理外です。
+* 環境変数：
+`.env` ファイルはGit管理外です。
 必要に応じて配布しますので、連絡してください。
 
-コード整形 / Lint：
-eslint.config.mjs により、ESLintとPrettierが設定済みです。
+* コード整形 / Lint：
+`eslint.config.mjs` により、ESLintとPrettierが設定済みです。
 
-ビルド成果物：
-.next/ 以下に生成され、Gitでは無視されます。
+* ビルド成果物：
+`.next/` 以下に生成され、Gitでは無視されます。
 
 他メンバーの更新を取得したとき：
 
@@ -56,8 +59,6 @@ npm install
 
 ## 📚 参考資料
 
-Next.js 公式ドキュメント
-
-Tailwind CSS 公式ドキュメント
-
-TypeScript ドキュメント
+- [Next.js 公式ドキュメント](https://nextjs.org/docs)  
+- [Tailwind CSS 公式ドキュメント](https://tailwindcss.com/docs)  
+- [TypeScript ドキュメント](https://www.typescriptlang.org/docs/)  
