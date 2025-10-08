@@ -48,13 +48,13 @@ eslint.config.mjs により、ESLintとPrettierが設定済みです。
 
 他メンバーの更新を取得したとき：
 
-git pull
+```
 npm install
-
+```
 
 を実行して依存関係を同期してください。
 
-📚 参考資料
+## 📚 参考資料
 
 Next.js 公式ドキュメント
 
