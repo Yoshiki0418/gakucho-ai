@@ -3,6 +3,7 @@
 import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
 import Icon from '@/components/atoms/Icon'
 import { SpeakerHeader } from '@/components/molecules/SpeakerHeader'
+import { MessageContent } from '@/components/molecules/MessageContent'
 
 export default function IconDemoPage() {
   return (
@@ -14,7 +15,7 @@ export default function IconDemoPage() {
         alignItems: 'center',
         justifyContent: 'center',
         height: '100vh',
-        backgroundColor: '#ffffffff',
+        backgroundColor: '#232222ff',
         fontFamily: 'sans-serif',
         padding: '24px',
       }}
@@ -73,6 +74,18 @@ export default function IconDemoPage() {
             status="busy"
             fontSize="clamp(14px, 2vw, 20px)"
             width='200px'
+          />
+
+          <MessageContent
+            role="assistant"
+            variant="plain"
+            text="こんにちは。こちらこそ、こうして直接話せるのは嬉しいですね。入学式、緊張しましたか？"
+          />
+
+          <MessageContent
+            role="user"
+            variant="plain"
+            text="学長先生、こんにちは。今日はお話しできて光栄です！"
           />
 
       </section>
