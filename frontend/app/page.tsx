@@ -1,40 +1,99 @@
 'use client'
 
-import Text from '@/components/atoms/Text'
+import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
+import Icon from '@/components/atoms/Icon'
 
-export default function LiveChatDemo() {
+export default function IconDemoPage() {
   return (
     <main
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
-        alignItems: 'flex-start',
-        justifyContent: 'flex-start',
+        gap: '48px',
+        alignItems: 'center',
+        justifyContent: 'center',
         height: '100vh',
-        padding: '2rem',
-        background: '#0d1117',
-        color: 'white',
+        backgroundColor: '#f8f8f8',
         fontFamily: 'sans-serif',
+        padding: '24px',
       }}
     >
-      <h1 style={{ marginBottom: '1rem' }}>LiveChat Text Demo</h1>
+      <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>🎨 Icon Component Demo</h1>
 
-      <Text $variants="livechat" $isUser={false}>
-        <strong style={{ color: '#5FBB64' }}>大澤敏</strong>：こんにちは。AI学長システムへようこそ。
-      </Text>
+      {/* ========== symbol variant（操作アイコン） ========== */}
+      <section
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          alignItems: 'center',
+        }}
+      >
+        <h2 style={{ fontSize: '1.2rem' }}>Symbol Icons</h2>
+        <div style={{ display: 'flex', gap: '24px' }}>
+          <Icon $variant="symbol" $icon={<FaMicrophone />} $size={48} $color="#007AFF" />
+          <Icon $variant="symbol" $icon={<FaPaperPlane />} $size={48} $color="#FF9500" />
+          <Icon $variant="symbol" $icon={<FaCog />} $size={48} $color="#333" />
+        </div>
+      </section>
 
-      <Text $variants="livechat" $isUser={true}>
-        <strong>あなた</strong>：こんにちは！お会いできて光栄です。
-      </Text>
+      {/* ========== avatar variant（人物・AI） ========== */}
+      <section
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          alignItems: 'center',
+        }}
+      >
+        <h2 style={{ fontSize: '1.2rem' }}>Avatar Icons</h2>
+        <div style={{ display: 'flex', gap: '24px' }}>
+          {/* ✅ 学長AI（画像・オンライン） */}
+          <Icon
+            $variant="avatar"
+            $src="/avatars/gakucho.png"
+            $status="online"
+            $size={60}
+            $backgroundColor="#ccc"
+          />
 
-      <Text $variants="livechat" $isUser={false}>
-        <strong style={{ color: '#5FBB64' }}>大澤敏</strong>：ありがとうございます。今日はどんなお話をしましょうか？
-      </Text>
+          {/* ✅ ユーザー（名前・ビジー） */}
+          <Icon
+            $variant="avatar"
+            $name="山本"
+            $status="busy"
+            $backgroundColor="#555"
+            $size={60}
+          />
 
-      <Text $variants="livechat" $isUser={true}>
-        <strong>あなた</strong>：学長AIプロジェクトについて教えてください！
-      </Text>
+          {/* ✅ 匿名ユーザー（オフライン） */}
+          <Icon
+            $variant="avatar"
+            $name="?"
+            $status="offline"
+            $backgroundColor="#aaa"
+            $size={60}
+          />
+
+          {/* ✅ ステータス非表示パターン（null指定） */}
+          <Icon
+            $variant="avatar"
+            $name="Guest"
+            $status={null}
+            $backgroundColor="#888"
+            $size={60}
+          />
+
+          {/* ✅ ステータス非表示パターン（false指定） */}
+          <Icon
+            $variant="avatar"
+            $name="AI"
+            $status={false}
+            $backgroundColor="#444"
+            $size={60}
+          />
+        </div>
+      </section>
     </main>
   )
 }
