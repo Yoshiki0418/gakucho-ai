@@ -1,33 +1,35 @@
-'use client'
-import styled from 'styled-components'
-import React from 'react'
+'use client';
+import styled from 'styled-components';
+import React from 'react';
 
-type StatusType = 'online' | 'offline' | 'busy'
+type StatusType = 'online' | 'offline' | 'busy';
 
 type IconProps = {
-  $variant?: 'symbol' | 'avatar'
-  $icon?: React.ReactNode
-  $src?: string
-  $alt?: string
-  $name?: string
-  $status?: StatusType | false | null
-  $size?: number
-  $shape?: 'circle' | 'square'
-  $backgroundColor?: string
-  $color?: string
-  $border?: string
-}
+  $variant?: 'symbol' | 'avatar';
+  $icon?: React.ReactNode;
+  $src?: string;
+  $alt?: string;
+  $name?: string;
+  $status?: StatusType | false | null;
+  $size?: number | string;
+  $shape?: 'circle' | 'square';
+  $backgroundColor?: string;
+  $color?: string;
+  $border?: string;
+};
 
 /* === 共通ラッパ === */
 const IconWrapper = styled.div<{
-  $size: number
-  $shape: 'circle' | 'square'
-  $backgroundColor?: string
-  $border?: string
+  $size: number | string;
+  $shape: 'circle' | 'square';
+  $backgroundColor?: string;
+  $border?: string;
 }>`
   position: relative;
-  width: ${({ $size }) => $size}px;
-  height: ${({ $size }) => $size}px;
+  width: ${({ $size }) =>
+    typeof $size === 'number' ? `${$size}px` : $size};
+  height: ${({ $size }) =>
+    typeof $size === 'number' ? `${$size}px` : $size};
   border-radius: ${({ $shape }) => ($shape === 'circle' ? '50%' : '8px')};
   background-color: ${({ $backgroundColor }) => $backgroundColor || 'transparent'};
   border: ${({ $border }) => $border || 'none'};
@@ -35,15 +37,15 @@ const IconWrapper = styled.div<{
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  box-shadow: 0 0 2px rgba(255, 13, 13, 0.2);
-`
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+`;
 
 /* === avatarモードの画像 === */
 const AvatarImage = styled.img`
   width: 100%;
   height: 100%;
   object-fit: cover;
-`
+`;
 
 /* === avatarモードのステータスドット === */
 const StatusDot = styled.span<{ $status?: StatusType }>`
@@ -67,10 +69,10 @@ const StatusDot = styled.span<{ $status?: StatusType }>`
     `}
   border: 2px solid white;
   box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
-`
+`;
 
 /* === 本体コンポーネント === */
-const Icon = ({
+const Icon: React.FC<IconProps> = ({
   $variant = 'symbol',
   $icon,
   $src,
@@ -82,9 +84,9 @@ const Icon = ({
   $backgroundColor,
   $color = '#000',
   $border,
-}: IconProps) => {
+}) => {
   const isStatusVisible =
-    $status === 'online' || $status === 'offline' || $status === 'busy'
+    $status === 'online' || $status === 'offline' || $status === 'busy';
 
   return (
     <IconWrapper
@@ -93,6 +95,7 @@ const Icon = ({
       $backgroundColor={$backgroundColor}
       $border={$border}
     >
+      {/* === avatarモード === */}
       {$variant === 'avatar' ? (
         <>
           {$src ? (
@@ -102,20 +105,21 @@ const Icon = ({
               style={{
                 color: $color,
                 fontWeight: 'bold',
-                fontSize: $size * 0.4,
+                fontSize:
+                  typeof $size === 'number' ? $size * 0.4 : '1em',
               }}
             >
               {$name ? $name[0] : '?'}
             </span>
           )}
-
-          {/* ✅ ステータス表示判定 */}
           {isStatusVisible && <StatusDot $status={$status} />}
         </>
       ) : (
+        /* === symbolモード === */
         <span
           style={{
-            fontSize: $size * 0.6,
+            fontSize:
+              typeof $size === 'number' ? $size * 0.6 : '1.5em',
             color: $color,
             display: 'flex',
             alignItems: 'center',
@@ -126,7 +130,7 @@ const Icon = ({
         </span>
       )}
     </IconWrapper>
-  )
-}
+  );
+};
 
-export default Icon
+export default Icon;

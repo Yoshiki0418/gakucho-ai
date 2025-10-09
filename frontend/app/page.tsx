@@ -2,7 +2,7 @@
 
 import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
 import Icon from '@/components/atoms/Icon'
-import { NameLabel } from '@/components/atoms/NameLabel'
+import { SpeakerHeader } from '@/components/molecules/SpeakerHeader'
 
 export default function IconDemoPage() {
   return (
@@ -14,7 +14,7 @@ export default function IconDemoPage() {
         alignItems: 'center',
         justifyContent: 'center',
         height: '100vh',
-        backgroundColor: '#413D46',
+        backgroundColor: '#ffffffff',
         fontFamily: 'sans-serif',
         padding: '24px',
       }}
@@ -47,62 +47,34 @@ export default function IconDemoPage() {
           alignItems: 'center',
         }}
       >
-        <h2 style={{ fontSize: '1.2rem' }}>Avatar Icons</h2>
-        <div style={{ display: 'flex', gap: '24px' }}>
-          {/* ✅ 学長AI（画像・オンライン） */}
-          <Icon
-            $variant="avatar"
-            $src="/avatars/gakucho.png"
-            $status="online"
-            $size={49}
-            $backgroundColor="#ccc"
-          />
-
-          {/* ✅ ユーザー（名前・ビジー） */}
-          <Icon
-            $variant="avatar"
-            $name="山本"
-            $status="busy"
-            $backgroundColor="#555"
-            $size={60}
-          />
-
-          {/* ✅ 匿名ユーザー（オフライン） */}
-          <Icon
-            $variant="avatar"
-            $name="?"
-            $status="offline"
-            $backgroundColor="#aaa"
-            $size={60}
-          />
-
-          {/* ✅ ステータス非表示パターン（null指定） */}
-          <Icon
-            $variant="avatar"
-            $name="Guest"
-            $status={null}
-            $backgroundColor="#888"
-            $size={60}
-          />
-
-          {/* ✅ ステータス非表示パターン（false指定） */}
-          <Icon
-            $variant="avatar"
-            $name="AI"
-            $status={false}
-            $backgroundColor="#444"
-            $size={60}
-          />
-        </div>
-        <NameLabel name="あなた" />
-
-        <NameLabel name="大澤敏" color="#10B981" weight="bold" />
-
-        <NameLabel
-          name="Rumina"
-          color="rgb(56, 189, 248)" 
-          suffix={<span className="text-xs bg-gray-700 px-1 rounded">AI</span>}
+        <SpeakerHeader
+          name="大澤敏"
+          avatarSrc="/avatars/gakucho.png"
+          color="#10B981"
+          weight="bold"
+          avatarSize="clamp(40px, 3.5vw, 59px)"
+          width='200px'
         />
+
+          <SpeakerHeader
+            name="Rumina"
+            avatarSrc="/avatars/rumina.png"
+            color="rgb(56, 189, 248)"
+            suffix={<span className="text-xs bg-gray-700 px-1 rounded">AI</span>}
+            status="online"
+            width='200px'
+          />
+
+          <SpeakerHeader
+            name="あなた"
+            color="#d4d4d8"
+            weight="semibold"
+            avatarSize={48}
+            status="busy"
+            fontSize="clamp(14px, 2vw, 20px)"
+            width='200px'
+          />
+
       </section>
     </main>
   )
