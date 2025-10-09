@@ -2,6 +2,7 @@
 
 import Button from '@/components/atoms/Button'
 import Input from '@/components/atoms/InputText'
+import UserIcon from '@/components/atoms/Icon'
 
 export default function HomePage() {
   return (
@@ -61,27 +62,27 @@ export default function HomePage() {
         }}
       >
         <h2>Input Variants</h2>
+        <Input $variants="auth" placeholder="メールアドレスを入力" />
+        <Input $variants="serch" placeholder="キーワード検索" />
+        <Input $variants="chat" placeholder="メッセージを入力..." />
+      </section>
 
-        {/* Auth用（ログインフォーム想定） */}
-        <Input
-          $variants="auth"
-          placeholder="メールアドレスを入力"
-          onChange={(e) => console.log('auth:', e.target.value)}
-        />
+      {/* ========================== */}
+      {/* Icons */}
+      {/* ========================== */}
+      <section
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        <h2>Icon Demo</h2>
 
-        {/* Search用 */}
-        <Input
-          $variants="serch"
-          placeholder="キーワード検索"
-          onChange={(e) => console.log('search:', e.target.value)}
-        />
-
-        {/* Chat用 */}
-        <Input
-          $variants="chat"
-          placeholder="メッセージを入力..."
-          onChange={(e) => console.log('chat:', e.target.value)}
-        />
+        <UserIcon />
+        <UserIcon $size={60} $color="#ffffff" $backgroundColor="#4A90E2" />
+        <UserIcon $size={40} $color="#4A90E2" $backgroundColor="#E3F2FD" />
       </section>
     </main>
   )
