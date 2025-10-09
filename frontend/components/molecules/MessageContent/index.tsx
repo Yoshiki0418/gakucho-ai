@@ -4,16 +4,11 @@ import styled from "styled-components";
 import Text from "@/components/atoms/Text";
 
 type MessageContentProps = {
-  /** 本文テキスト */
   text: string;
-  /** 発話者種別 */
   role?: "user" | "assistant";
-  /** 最大幅（任意） */
   maxWidth?: string;
-  /** 上下マージン */
   marginTop?: string;
   marginBottom?: string;
-  /** 今後のUIテーマ切替用 */
   variant?: "plain" | "chat" | "livechat";
 };
 
