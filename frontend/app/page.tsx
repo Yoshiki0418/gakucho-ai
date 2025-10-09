@@ -2,6 +2,7 @@
 
 import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
 import Icon from '@/components/atoms/Icon'
+import { NameLabel } from '@/components/atoms/NameLabel'
 
 export default function IconDemoPage() {
   return (
@@ -13,7 +14,7 @@ export default function IconDemoPage() {
         alignItems: 'center',
         justifyContent: 'center',
         height: '100vh',
-        backgroundColor: '#f8f8f8',
+        backgroundColor: '#413D46',
         fontFamily: 'sans-serif',
         padding: '24px',
       }}
@@ -53,7 +54,7 @@ export default function IconDemoPage() {
             $variant="avatar"
             $src="/avatars/gakucho.png"
             $status="online"
-            $size={60}
+            $size={49}
             $backgroundColor="#ccc"
           />
 
@@ -93,6 +94,15 @@ export default function IconDemoPage() {
             $size={60}
           />
         </div>
+        <NameLabel name="あなた" />
+
+        <NameLabel name="大澤敏" color="#10B981" weight="bold" />
+
+        <NameLabel
+          name="Rumina"
+          color="rgb(56, 189, 248)" 
+          suffix={<span className="text-xs bg-gray-700 px-1 rounded">AI</span>}
+        />
       </section>
     </main>
   )
