@@ -1,89 +1,40 @@
 'use client'
 
-import Button from '@/components/atoms/Button'
-import Input from '@/components/atoms/InputText'
-import UserIcon from '@/components/atoms/Icon'
+import Text from '@/components/atoms/Text'
 
-export default function HomePage() {
+export default function LiveChatDemo() {
   return (
     <main
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '24px',
-        alignItems: 'center',
-        justifyContent: 'center',
+        gap: '8px',
+        alignItems: 'flex-start',
+        justifyContent: 'flex-start',
         height: '100vh',
-        backgroundColor: '#fafafa',
+        padding: '2rem',
+        background: '#0d1117',
+        color: 'white',
+        fontFamily: 'sans-serif',
       }}
     >
-      <h1>Atoms Components Demo</h1>
+      <h1 style={{ marginBottom: '1rem' }}>LiveChat Text Demo</h1>
 
-      {/* ========================== */}
-      {/* Buttons */}
-      {/* ========================== */}
-      <section
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-      >
-        <h2>Button Variants</h2>
-        <Button $variants="Primary" onClick={() => alert('Primary clicked!')}>
-          Primary
-        </Button>
+      <Text $variants="livechat" $isUser={false}>
+        <strong style={{ color: '#5FBB64' }}>大澤敏</strong>：こんにちは。AI学長システムへようこそ。
+      </Text>
 
-        <Button $variants="Toggle" $isactive>
-          Active Toggle
-        </Button>
+      <Text $variants="livechat" $isUser={true}>
+        <strong>あなた</strong>：こんにちは！お会いできて光栄です。
+      </Text>
 
-        <Button $variants="Toggle" $isactive={false}>
-          Inactive Toggle
-        </Button>
+      <Text $variants="livechat" $isUser={false}>
+        <strong style={{ color: '#5FBB64' }}>大澤敏</strong>：ありがとうございます。今日はどんなお話をしましょうか？
+      </Text>
 
-        <Button $variants="Icon">
-          <span role="img" aria-label="star">
-            ⭐
-          </span>
-        </Button>
-      </section>
-
-      {/* ========================== */}
-      {/* Inputs */}
-      {/* ========================== */}
-      <section
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-      >
-        <h2>Input Variants</h2>
-        <Input $variants="auth" placeholder="メールアドレスを入力" />
-        <Input $variants="serch" placeholder="キーワード検索" />
-        <Input $variants="chat" placeholder="メッセージを入力..." />
-      </section>
-
-      {/* ========================== */}
-      {/* Icons */}
-      {/* ========================== */}
-      <section
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-      >
-        <h2>Icon Demo</h2>
-
-        <UserIcon />
-        <UserIcon $size={60} $color="#ffffff" $backgroundColor="#4A90E2" />
-        <UserIcon $size={40} $color="#4A90E2" $backgroundColor="#E3F2FD" />
-      </section>
+      <Text $variants="livechat" $isUser={true}>
+        <strong>あなた</strong>：学長AIプロジェクトについて教えてください！
+      </Text>
     </main>
   )
 }
