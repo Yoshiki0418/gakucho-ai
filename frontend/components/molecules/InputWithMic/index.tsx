@@ -25,7 +25,7 @@ export default function InputWithMic({
     <Flex
       $align_items="center"
       $justify_content="space-between"
-      $backgroundColor="#252323ff"
+      $backgroundColor="transparent"
       $borderRadius="16px"
       $padding="12px 16px"
       $width="100%"
