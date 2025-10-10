@@ -1,42 +1,50 @@
 'use client';
 import React from "react";
-import styled from "styled-components";
+import Box from "@/components/styles/Box";
 import Text from "@/components/atoms/Text";
 
 type MessageContentProps = {
   text: string;
   role?: "user" | "assistant";
   maxWidth?: string;
-  marginTop?: string;
-  marginBottom?: string;
-  marginLeft?: string;
+  $marginTop?: string;
+  $marginBottom?: string;
+  $marginLeft?: string;
+  /** テキストスタイルバリアント */
   variant?: "plain" | "chat" | "livechat";
 };
 
-const Container = styled.div<Pick<MessageContentProps, "maxWidth" | "marginTop" | "marginBottom" | "marginLeft">>`
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  width: 100%;
-  max-width: ${({ maxWidth }) => maxWidth || "90%"};
-  margin-top: ${({ marginTop }) => marginTop || "4px"};
-  margin-bottom: ${({ marginBottom }) => marginBottom || "0px"};
-  margin-left: ${({ marginLeft }) => marginLeft || "0px"};
-`;
-
+/**
+ * 💬 MessageContent
+ * 発話本文部分（吹き出し or シンプルテキスト）
+ */
 export const MessageContent: React.FC<MessageContentProps> = ({
   text,
   role = "assistant",
   maxWidth,
-  marginTop,
-  marginBottom,
-  marginLeft,
+  $marginTop,
+  $marginBottom,
+  $marginLeft,
   variant = "plain",
 }) => {
   return (
-    <Container maxWidth={maxWidth} marginTop={marginTop} marginBottom={marginBottom} marginLeft={marginLeft}>
+    <Box
+      $display="flex"
+      $justifyContent="flex-start"
+      $width="100%"
+      $maxWidth={maxWidth || "90%"}
+      $marginTop={$marginTop || "4px"}
+      $marginBottom={$marginBottom || "0px"}
+      $marginLeft={$marginLeft || "0px"}
+    >
       <Text
-        $variants={variant === "chat" ? "chat" : variant === "livechat" ? "livechat" : undefined}
+        $variants={
+          variant === "chat"
+            ? "chat"
+            : variant === "livechat"
+            ? "livechat"
+            : undefined
+        }
         $isUser={role === "user"}
         $align="left"
         $fontSize="clamp(16px, 1.2vw, 20px)"
@@ -45,6 +53,6 @@ export const MessageContent: React.FC<MessageContentProps> = ({
       >
         {text}
       </Text>
-    </Container>
+    </Box>
   );
 };

@@ -5,7 +5,7 @@ import { SpeakerHeader } from "@/components/molecules/SpeakerHeader";
 import { MessageContent } from "@/components/molecules/MessageContent";
 
 type MessageItemProps = {
-  name: string;
+  name?: string;
   avatarSrc?: string;
   status?: "online" | "offline" | "busy" | false | null;
   nameColor?: string;
@@ -17,7 +17,6 @@ type MessageItemProps = {
 };
 
 export const MessageItem: React.FC<MessageItemProps> = ({
-  name,
   avatarSrc,
   status,
   nameColor,
@@ -26,7 +25,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   variant = "plain",
   hideHeader = false,
   marginBottom = "24px",
+  name,
 }) => {
+  // role に応じてデフォルト設定を上書き
+  const isAssistant = role === "assistant";
+  const effectiveAvatar =
+    avatarSrc || (isAssistant ? "/avatars/gakucho.png" : "/avatars/user.png");
+  const backgroundColor = isAssistant ? "#D7CBBF" : "#D7CBBF";
+  const effectiveColor =
+    nameColor || (isAssistant ? "#10B981" : "#d4d4d8");
+  const displayName = name || (isAssistant ? "大澤敏" : "あなた");
+
   return (
     <Flex
       $flex_direction="column"
@@ -34,21 +43,24 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       $width="100%"
       $marginBottom={marginBottom}
     >
+      {/* ヘッダー（話者名 + アバター） */}
       {!hideHeader && (
         <SpeakerHeader
-          name={name}
-          avatarSrc={avatarSrc}
+          name={displayName}
+          avatarSrc={effectiveAvatar}
           status={status}
-          color={nameColor}
+          color={effectiveColor}
+          backgroundColor={backgroundColor}
         />
       )}
 
+      {/* 発話本文 */}
       <MessageContent
         text={text}
         role={role}
         variant={variant}
-        marginTop="16px"
-        marginLeft="20px"
+        $marginTop="16px"
+        $marginLeft="20px"
       />
     </Flex>
   );

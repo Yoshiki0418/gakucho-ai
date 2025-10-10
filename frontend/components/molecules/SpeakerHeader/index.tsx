@@ -14,6 +14,7 @@ type SpeakerHeaderProps = {
   fontSize?: string;
   avatarSize?: number | string;
   width?: string;
+  backgroundColor?: string;
 };
 
 export const SpeakerHeader: React.FC<SpeakerHeaderProps> = ({
@@ -27,6 +28,7 @@ export const SpeakerHeader: React.FC<SpeakerHeaderProps> = ({
   fontSize,
   avatarSize = 40,
   width,
+  backgroundColor,
 }) => {
   return (
     <Flex $gap="12px" $alignItems="center" $width={width}>
@@ -34,6 +36,7 @@ export const SpeakerHeader: React.FC<SpeakerHeaderProps> = ({
         $variant="avatar"
         $src={avatarSrc}
         $alt={avatarAlt}
+        $backgroundColor={backgroundColor}
         $name={name}
         $status={status}
         $size={avatarSize}   
