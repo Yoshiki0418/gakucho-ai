@@ -55,10 +55,6 @@ export default function ChatDemoPage() {
     console.log('🎙️ Mic clicked');
   };
 
-  const handleSend = () => {
-    console.log('送信:', inputValue);
-    setInputValue(''); // 送信後にリセット
-  };
   return (
     <main
       style={{
