@@ -2,8 +2,7 @@
 
 import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
 import Icon from '@/components/atoms/Icon'
-import { SpeakerHeader } from '@/components/molecules/SpeakerHeader'
-import { MessageContent } from '@/components/molecules/MessageContent'
+import { MessageItem } from '@/components/organisms/MessageItem'
 
 export default function IconDemoPage() {
   return (
@@ -48,45 +47,21 @@ export default function IconDemoPage() {
           alignItems: 'center',
         }}
       >
-        <SpeakerHeader
-          name="大澤敏"
-          avatarSrc="/avatars/gakucho.png"
-          color="#10B981"
-          weight="bold"
-          avatarSize="clamp(40px, 3.5vw, 59px)"
-          width='200px'
-        />
-
-          <SpeakerHeader
-            name="Rumina"
-            avatarSrc="/avatars/rumina.png"
-            color="rgb(56, 189, 248)"
-            suffix={<span className="text-xs bg-gray-700 px-1 rounded">AI</span>}
-            status="online"
-            width='200px'
-          />
-
-          <SpeakerHeader
+          <MessageItem
             name="あなた"
-            color="#d4d4d8"
-            weight="semibold"
-            avatarSize={48}
-            status="busy"
-            fontSize="clamp(14px, 2vw, 20px)"
-            width='200px'
-          />
-
-          <MessageContent
-            role="assistant"
-            variant="plain"
-            text="こんにちは。こちらこそ、こうして直接話せるのは嬉しいですね。入学式、緊張しましたか？"
-          />
-
-          <MessageContent
-            role="user"
-            variant="plain"
+            avatarSrc="/avatars/user.png"
             text="学長先生、こんにちは。今日はお話しできて光栄です！"
+            role="user"
           />
+
+          <MessageItem
+            name="大澤敏"
+            avatarSrc="/avatars/gakucho.png"
+            nameColor="#10B981"
+            text="こんにちは。こちらこそ、こうして直接話せるのは嬉しいですね。入学式、緊張しましたか？"
+            role="assistant"
+          />
+
 
       </section>
     </main>
