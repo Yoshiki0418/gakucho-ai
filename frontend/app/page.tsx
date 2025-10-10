@@ -1,10 +1,10 @@
-'use client';
+'use client'
 
-import React, { useState } from 'react';
-import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa';
-import Icon from '@/components/atoms/Icon';
-import { ChatList } from '@/components/organisms/ChatList';
-import InputWithMic from '@/components/molecules/InputWithMic'
+import React, { useState } from 'react'
+import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
+import Icon from '@/components/atoms/Icon'
+import { ChatList } from '@/components/organisms/ChatList'
+import ChatInputArea from '@/components/organisms/ChatInputArea' // ✅ ここを使用
 
 // 💬 デモ用メッセージデータ
 const messages = [
@@ -46,14 +46,24 @@ const messages = [
     text: '素晴らしい心構えですね。ぜひ多くを学び、良い経験を積んでください。',
     role: 'assistant',
   },
-] as const;
+] as const
 
 export default function ChatDemoPage() {
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState('')
+  const [isSending, setIsSending] = useState(false)
 
   const handleMicClick = () => {
-    console.log('🎙️ Mic clicked');
-  };
+    console.log('🎙️ Mic clicked')
+  }
+
+  const handleSend = async () => {
+    if (!inputValue.trim()) return
+    setIsSending(true)
+    console.log('送信:', inputValue)
+    await new Promise((r) => setTimeout(r, 1000)) // 擬似送信処理
+    setIsSending(false)
+    setInputValue('')
+  }
 
   return (
     <main
@@ -80,7 +90,7 @@ export default function ChatDemoPage() {
         💬 ChatList Component Demo
       </h1>
 
-      {/* ========== Symbol Icons（操作アイコン） ========== */}
+      {/* 操作アイコン（装飾） */}
       <section
         style={{
           display: 'flex',
@@ -99,23 +109,29 @@ export default function ChatDemoPage() {
         </div>
       </section>
 
-      {/* ========== ChatList（チャットメッセージ一覧） ========== */}
+      {/* チャット一覧 + 入力欄 */}
       <section
         style={{
           width: '100%',
           maxWidth: '700px',
           display: 'flex',
-          justifyContent: 'center',
+          flexDirection: 'column', // ✅ 縦方向に変更！
+          alignItems: 'center',
+          gap: '16px',
         }}
       >
+        {/* チャットリスト */}
         <ChatList messages={messages} width="100%" height="480px" />
 
-        <InputWithMic
+        {/* 入力エリア */}
+        <ChatInputArea
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)} // 🔹 入力値を更新
+          onChange={(e) => setInputValue(e.target.value)}
           onMicClick={handleMicClick}
+          onSend={handleSend}
+          isSending={isSending}
         />
       </section>
     </main>
-  );
+  )
 }
