@@ -55,11 +55,10 @@ const InputCSS = styled.input<InputProps>`
                     height: 2.35rem;
                     font-size: ${theme.fontSize.Small};
                     padding: 1.25rem 1.0rem;
-                    color: #484B4A;
                 `
         }
     }};
-    color:${({ color }) => color};
+    color:${({ $color }) => $color};
     background-color:${({ $backgroundColor }) => $backgroundColor || "#FFFFFF"};
     width:${({ $width }) => $width};
     height:${({ $height }) => $height};
@@ -80,6 +79,7 @@ const InputCSS = styled.input<InputProps>`
     padding-left:${({ $paddingLeft }) => $paddingLeft};
     text-align:${({ $textAlign }) => $textAlign};
     border-color: ${({ $isError }) => ($isError ? "#FF0000" : "#CCCCCC")};
+    border-radius:${({ $borderRadius }) => $borderRadius};
     background: ${({ $background }) => $background};
     &:focus {
         outline: none;

@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa';
 import Icon from '@/components/atoms/Icon';
 import { ChatList } from '@/components/organisms/ChatList';
+import InputWithMic from '@/components/molecules/InputWithMic'
 
 // 💬 デモ用メッセージデータ
 const messages = [
@@ -48,6 +49,12 @@ const messages = [
 ] as const;
 
 export default function ChatDemoPage() {
+  const [inputValue, setInputValue] = useState('');
+
+  const handleMicClick = () => {
+    console.log('🎙️ Mic clicked');
+  };
+
   return (
     <main
       style={{
@@ -102,6 +109,12 @@ export default function ChatDemoPage() {
         }}
       >
         <ChatList messages={messages} width="100%" height="480px" />
+
+        <InputWithMic
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)} // 🔹 入力値を更新
+          onMicClick={handleMicClick}
+        />
       </section>
     </main>
   );
