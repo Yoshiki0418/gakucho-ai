@@ -1,11 +1,11 @@
 'use client'
 
 import React from 'react'
-import Box from '@/components/styles/Box'
-import InputWithMic from '@/components/molecules/InputWithMic'
-import Button from '@/components/atoms/Button'
+import StandardChatInputArea from './standard'
+import FuturisticChatInputArea from './futuristic'
 
 interface ChatInputAreaProps {
+  mode?: 'standard' | 'futuristic' // どちらを使うか指定
   value: string
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onMicClick?: () => void
@@ -14,56 +14,18 @@ interface ChatInputAreaProps {
   disabled?: boolean
 }
 
+/**
+ * ChatInputArea コンポーネント（UIモード切り替え可能）
+ * 
+ * mode="standard" → 通常デザイン
+ * mode="futuristic" → 光るフューチャーデザイン
+ */
 export default function ChatInputArea({
-  value,
-  onChange,
-  onMicClick,
-  onSend,
-  isSending = false,
-  disabled = false,
+  mode = 'standard',
+  ...props
 }: ChatInputAreaProps) {
-  return (
-    <Box
-      $display="flex"
-      $width="100%"
-      $backgroundColor="#1b1b1b"
-      $borderRadius="20px"
-      $padding="16px"
-      $alignItems="center" 
-      style={{ flexDirection: 'column'}}
-    >
-      {/* 入力 + マイク */}
-      <InputWithMic
-        value={value}
-        onChange={onChange}
-        onMicClick={onMicClick}
-        disabled={disabled}
-        placeholder="ここに入力..."
-      />
-
-      {/* 送信ボタン（横幅いっぱい・下配置） */}
-      <Button
-        type="button"
-        onClick={onSend}
-        disabled={disabled || isSending}
-        $variants="Primary"
-        $backColor="#007AFF"
-        $hover_color="#339DFF"
-        $color="#fff"
-        $borderRadius="16px"
-        $padding="0px"
-        $fontSize="1rem"
-        $width="90%"
-        style={{
-          fontWeight: 600,
-          whiteSpace: 'nowrap',
-          opacity: disabled || isSending ? 0.6 : 1,
-          transition: 'opacity 0.2s ease',
-          cursor: disabled || isSending ? 'not-allowed' : 'pointer',
-        }}
-      >
-        {isSending ? '送信中...' : '質問する'}
-      </Button>
-    </Box>
-  )
+  if (mode === 'futuristic') {
+    return <FuturisticChatInputArea {...props} />
+  }
+  return <StandardChatInputArea {...props} />
 }
