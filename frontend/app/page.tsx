@@ -1,8 +1,6 @@
 'use client'
 
 import React, { useState } from 'react'
-import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
-import Icon from '@/components/atoms/Icon'
 import ChatPanel from '@/components/organisms/ChatPanel' // ✅ ChatPanelを使用
 
 // 💬 デモ用メッセージデータ
