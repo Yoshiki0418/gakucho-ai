@@ -1,16 +1,13 @@
 'use client'
 
 import React, { useState } from 'react'
-import { FaMicrophone, FaPaperPlane, FaCog } from 'react-icons/fa'
-import Icon from '@/components/atoms/Icon'
-import { ChatList } from '@/components/organisms/ChatList'
-import ChatInputArea from '@/components/organisms/ChatInputArea' // ✅ ここを使用
+import ChatPanel from '@/components/organisms/ChatPanel' // ✅ ChatPanelを使用
 
 // 💬 デモ用メッセージデータ
 const messages = [
   {
     id: '1',
-    text: '学長先生、こんにちは。今日はお話しできて光栄です！',
+    text: '学長先生、こんにちは。今日はお話しできて光栄です！私には可愛い彼女がいます',
     role: 'user',
   },
   {
@@ -46,7 +43,21 @@ const messages = [
     text: '素晴らしい心構えですね。ぜひ多くを学び、良い経験を積んでください。',
     role: 'assistant',
   },
-] as const
+  {
+    id: '7',
+    name: 'あなた',
+    avatarSrc: '/avatars/user.png',
+    text: 'これから研究室の活動も始まるので、いろいろ挑戦してみたいです！',
+    role: 'user',
+  },
+  {
+    id: '8',
+    name: 'あなた',
+    avatarSrc: '/avatars/user.png',
+    text: 'これから研究室の活動も始まるので、いろいろ挑戦してみたいです！',
+    role: 'user',
+  },
+] as const;
 
 export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
@@ -60,7 +71,7 @@ export default function ChatDemoPage() {
     if (!inputValue.trim()) return
     setIsSending(true)
     console.log('送信:', inputValue)
-    await new Promise((r) => setTimeout(r, 1000)) // 擬似送信処理
+    await new Promise((r) => setTimeout(r, 1000))
     setIsSending(false)
     setInputValue('')
   }
@@ -70,62 +81,28 @@ export default function ChatDemoPage() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
         justifyContent: 'flex-start',
         height: '100vh',
-        backgroundColor: '#232222',
+        backgroundColor: '#000',
         fontFamily: 'sans-serif',
-        padding: '24px',
-        overflowY: 'auto',
+        padding: '0px',
       }}
     >
-      {/* ページタイトル */}
-      <h1
-        style={{
-          fontSize: '1.8rem',
-          marginBottom: '24px',
-          color: '#f5f5f5',
-        }}
-      >
-        💬 ChatList Component Demo
-      </h1>
-
-      {/* 操作アイコン（装飾） */}
+      {/* ✅ ChatPanel のみを中央に表示 */}
       <section
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '16px',
-          marginBottom: '48px',
-        }}
-      >
-        <h2 style={{ fontSize: '1.2rem', color: '#ddd' }}>Symbol Icons</h2>
-
-        <div style={{ display: 'flex', gap: '24px' }}>
-          <Icon $variant="symbol" $icon={<FaMicrophone />} $size={48} $color="#007AFF" />
-          <Icon $variant="symbol" $icon={<FaPaperPlane />} $size={48} $color="#FF9500" />
-          <Icon $variant="symbol" $icon={<FaCog />} $size={48} $color="#ddd" />
-        </div>
-      </section>
-
-      {/* チャット一覧 + 入力欄 */}
-      <section
-        style={{
+          justifyContent: 'flex-start', // ✅ 左寄せ
+          alignItems: 'stretch',         // ✅ 高さ方向を埋める
+          height: '100vh',               // ✅ 画面全体の高さに
           width: '100%',
-          maxWidth: '700px',
-          display: 'flex',
-          flexDirection: 'column', // ✅ 縦方向に変更！
-          alignItems: 'center',
-          gap: '16px',
+          margin: 0,                     // ✅ 余白をなくす
+          padding: 0,
         }}
       >
-        {/* チャットリスト */}
-        <ChatList messages={messages} width="100%" height="480px" />
-
-        {/* 入力エリア */}
-        <ChatInputArea
-          value={inputValue}
+        <ChatPanel
+          messages={messages}
+          inputValue={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onMicClick={handleMicClick}
           onSend={handleSend}
