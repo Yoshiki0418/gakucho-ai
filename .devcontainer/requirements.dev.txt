@@ -1,2 +1,7 @@
 fastapi
 uvicorn[standard]
+flake8
+isort<6
+black
+mypy
+pysen
