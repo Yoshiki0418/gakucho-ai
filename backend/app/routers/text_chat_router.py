@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
 import asyncio
 import json
+
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/text-chat", tags=["Text Chat"])
 
@@ -11,7 +12,7 @@ async def text_chat_stream(request: Request):
     """
     ダミー応答:
     ユーザーの入力を受け取ったら、3回に分けて疑似メッセージをストリーミング返却する。
-    """ 
+    """
     body = await request.json()
     user_input = body.get("text", "")
 
