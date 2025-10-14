@@ -7,7 +7,7 @@ import ChatPanel from '@/components/organisms/ChatPanel' // ✅ ChatPanelを使�
 const messages = [
   {
     id: '1',
-    text: '学長先生、こんにちは。今日はお話しできて光栄です！私には可愛い彼女がいます',
+    text: '学長先生、こんにちは。今日はお話しできて光栄です！',
     role: 'user',
   },
   {
