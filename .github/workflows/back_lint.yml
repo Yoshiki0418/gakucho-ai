@@ -24,4 +24,5 @@ jobs:
           pip install pysen flake8 black isort mypy
 
       - name: Run pysen lint
+        working-directory: ./backend
         run: pysen run lint
