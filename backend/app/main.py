@@ -1,10 +1,11 @@
-from app.routers import text_chat_router
+from app.routers import text_chat_router, audio_stream_router
 from fastapi import FastAPI
 
 app = FastAPI(title="Gakucho AI Backend", version="0.1.0")
 
 # ===== ルーター登録 =====
 app.include_router(text_chat_router.router)
+app.include_router(audio_stream_router.router)
 
 
 # ===== ヘルスチェック =====
