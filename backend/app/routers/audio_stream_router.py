@@ -1,7 +1,9 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import asyncio
 
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 router = APIRouter(prefix="/ws", tags=["Audio Stream"])
+
 
 @router.websocket("/audio-stream")
 async def audio_stream(ws: WebSocket):
@@ -23,13 +25,15 @@ async def audio_stream(ws: WebSocket):
             elif "text" in data:
                 # テキストデータ（制御信号やJSONメッセージ）
                 print(f"💬 Received text: {data['text']}")
-            
+
             # ダミー応答を送信
             await asyncio.sleep(0.5)
-            await ws.send_json({
-                "type": "status",
-                "message": "音声を受信しました。現在はダミー応答です。"
-            })
+            await ws.send_json(
+                {
+                    "type": "status",
+                    "message": "音声を受信しました。現在はダミー応答です。",
+                }
+            )
 
     except WebSocketDisconnect:
         print("❌ WebSocket disconnected")
