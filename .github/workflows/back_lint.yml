@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pysen flake8 black isort mypy
+          pip install pysen black flake8 "isort<6" mypy
 
       - name: Run pysen lint
         working-directory: ./backend
