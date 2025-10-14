@@ -1,20 +1,66 @@
 from app.routers import audio_stream_router, text_chat_router
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Gakucho AI Backend", version="0.1.0")
+# =========================================================
+# アプリ初期化
+# =========================================================
+app = FastAPI(
+    title="Gakucho AI Backend",
+    version="0.1.0",
+    description=(
+        "金沢工業大学 学長AIプロジェクトのバックエンドAPIです。\n\n"
+        "- `/api/text-chat/stream` : テキスト入力を受け取りストリーミングで返答（文章単位）\n"
+        "- `/api/text-chat/char-stream` : テキスト入力を受け取りストリーミング返答（単語単位）\n"
+        "- `/ws/audio-stream` : 音声入力をリアルタイムで処理"
+    ),
+    contact={
+        "name": "Gakucho AI Project Team",
+        "email": "c1206618@st.kanazawa-it.ac.jp",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+)
 
-# ===== ルーター登録 =====
+# =========================================================
+# CORS設定
+# =========================================================
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    #     "https://gakucho-ai.vercel.app",  # 本番フロント想定
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# =========================================================
+# ルーター登録
+# =========================================================
 app.include_router(text_chat_router.router)
 app.include_router(audio_stream_router.router)
 
 
-# ===== ヘルスチェック =====
+# =========================================================
+# ヘルスチェック
+# =========================================================
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
 
 
-# ===== 起動設定 =====
+# =========================================================
+# 起動設定
+# =========================================================
 if __name__ == "__main__":
     import uvicorn
 
