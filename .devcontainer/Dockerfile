@@ -1,5 +1,5 @@
 # ベースイメージ
-FROM ubuntu:22.04
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
 USER root
 
