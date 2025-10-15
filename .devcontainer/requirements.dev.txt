@@ -5,3 +5,6 @@ isort<6
 black
 mypy
 pysen
+numpy
+soundfile
+openai-whisper
