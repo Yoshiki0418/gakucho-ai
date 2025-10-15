@@ -2,8 +2,6 @@ jobs:
   test:
     name: Run Python Tests
     runs-on: ubuntu-latest
-    env:
-      PYTHONPATH: backend
 
     steps:
       - name: 📥 Checkout repository
