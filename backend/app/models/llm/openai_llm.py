@@ -1,0 +1,97 @@
+import os
+from typing import AsyncIterator, Dict, List, Optional
+
+from dotenv import load_dotenv
+from openai import AsyncOpenAI, OpenAI
+
+from .base_llm import BaseLLM, PromptContext
+
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+openai_streaming_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+
+
+class OpenAILLM(BaseLLM):
+    """OpenAI Chat APIを利用したLLM実装クラス"""
+
+    def __init__(self, model_name: str = "gpt-4o-mini"):
+        self._model_name = model_name
+
+    # ───────────────────────────────
+    # コンテキスト構築
+    # ───────────────────────────────
+    def build_context(
+        self,
+        message: str,
+        system_prompt: str,
+        history: List[Dict[str, str]],
+        tool_calls: Optional[List[Dict[str, str]]] = None,
+    ) -> PromptContext:
+        """
+        OpenAI形式（messages形式）でコンテキストを構築する。
+        """
+        messages = [{"role": "system", "content": system_prompt}]
+        messages += history
+        messages.append({"role": "user", "content": message})
+
+        # ツールコール（関数呼び出しなど）がある場合に拡張
+        if tool_calls:
+            messages.append({"role": "system", "content": f"[tool_calls] {tool_calls}"})
+
+        return messages
+
+    # ───────────────────────────────
+    # 非ストリーミング生成
+    # ───────────────────────────────
+    async def _generate_impl(
+        self,
+        message: PromptContext,
+        history: List[Dict[str, str]],
+        tool_calls: Optional[List[Dict[str, str]]] = None,
+        max_tokens: int = 150,
+        temperature: float = 0.8,
+    ) -> str:
+        """OpenAIのChatCompletion APIを利用して応答を生成"""
+
+        messages = self.build_context(message, self._system_prompt, history, tool_calls)
+
+        print(messages)
+
+        response = openai_client.chat.completions.create(
+            model=self._model_name,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+        return response.choices[0].message.content.strip()
+
+    # ───────────────────────────────
+    # ストリーミング生成
+    # ───────────────────────────────
+    async def stream_generate(
+        self,
+        message: str,
+        history: List[Dict[str, str]],
+        tool_calls: Optional[List[Dict[str, str]]] = None,
+        max_tokens: int = 150,
+        temperature: float = 0.8,
+    ) -> AsyncIterator[str]:
+        """OpenAI APIのストリームモードを利用して逐次出力"""
+
+        messages = self.build_context(message, self._system_prompt, history, tool_calls)
+
+        # OpenAI 非同期ストリーム
+        stream = await openai_streaming_client.chat.completions.create(
+            model=self._model_name,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+        )
+
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
