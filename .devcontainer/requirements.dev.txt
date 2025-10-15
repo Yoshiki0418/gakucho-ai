@@ -8,3 +8,8 @@ pysen
 numpy
 soundfile
 openai-whisper
+transformers
+openai
+pytest
+pytest-asyncio
+tiktoken
