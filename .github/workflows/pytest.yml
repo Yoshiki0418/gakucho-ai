@@ -1,14 +1,9 @@
-name: 🧪 Run Pytest
-
-on:
-  pull_request:
-    branches:
-      - "*" 
-
 jobs:
   test:
     name: Run Python Tests
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: backend
 
     steps:
       - name: 📥 Checkout repository
@@ -26,5 +21,4 @@ jobs:
 
       - name: 🧪 Run pytest
         run: |
-          export PYTHONPATH=backend
           pytest -s --maxfail=1 --disable-warnings -q
