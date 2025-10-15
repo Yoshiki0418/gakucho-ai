@@ -13,7 +13,8 @@ exclude_globs = ["**/__init__.py"]
 
 [tool.pytest.ini_options]
 addopts = "-s -v"
+pythonpath = ["."]
+testpaths = ["tests"]
 markers = [
     "utility"
 ]
-describe_prefixes = ["describe_", "context_"]
