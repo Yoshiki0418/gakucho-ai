@@ -3,6 +3,7 @@ from transformers import AutoTokenizer
 
 _cached = {}
 
+
 def get_tokenizer(model_name: str):
     """モデル名に応じてトークナイザーを自動選択"""
     if model_name in _cached:
