@@ -1,6 +1,7 @@
 import asyncio
 from abc import ABC, abstractmethod
 from typing import Any
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -35,20 +36,6 @@ class BaseSTT(ABC):
         pcm_chunk を入力し、テキスト文字列を返す。
         """
         raise NotImplementedError("Subclasses must implement this method.")
-
-    async def transcribe_audio_chunk(self, pcm_chunk: bytes) -> None:
-        """
-        非同期モード: 音声を受け取り、結果をresult_queueに流す。
-        対話パイプライン内で利用（STT→LLM→TTS）。
-        """
-        start = asyncio.get_event_loop().time()
-        text = await self._transcribe_impl(pcm_chunk)
-        latency_ms = int((asyncio.get_event_loop().time() - start) * 1000)
-
-        await self.result_queue.put({
-            "text": text,
-            "latency_ms": latency_ms,
-        })
 
     async def _transcribe_and_measure(self, pcm_chunk: bytes) -> tuple[str, int]:
         """
@@ -85,11 +72,8 @@ class BaseSTT(ABC):
         text, latency = await self._transcribe_and_measure(pcm_chunk)
         return {"text": text, "latency_ms": latency}
 
-
     # ---------- サイレンストリム ----------
-    def _trim_tail_silence(
-        self, np_chunk: NDArray[np.int16]
-    ) -> NDArray[np.int16]:
+    def _trim_tail_silence(self, np_chunk: NDArray[np.int16]) -> NDArray[np.int16]:
         """末尾の無音部分をカットするユーティリティ"""
         trim = int(self._silence_trim_duration * self.sample_rate)
         return np_chunk[:-trim] if trim and len(np_chunk) > trim else np_chunk

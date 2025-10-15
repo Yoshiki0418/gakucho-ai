@@ -1,9 +1,9 @@
-import torch
-import numpy as np
 import asyncio
 import tempfile
+
+import numpy as np
 import soundfile as sf
-from typing import Any
+import torch
 import whisper
 
 from .base_stt import BaseSTT
@@ -35,7 +35,9 @@ class WhisperSTT(BaseSTT):
             sf.write(tmpfile.name, audio_np, self.sample_rate)
 
             # Whisper 推論は同期処理なので to_thread で非同期化
-            result = await asyncio.to_thread(self.model.transcribe, tmpfile.name, language="ja")
+            result = await asyncio.to_thread(
+                self.model.transcribe, tmpfile.name, language="ja"
+            )
 
         text = result.get("text", "").strip()
         return text
