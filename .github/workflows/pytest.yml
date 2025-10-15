@@ -18,6 +18,5 @@ jobs:
           pip install -r requirements.ci.txt
 
       - name: 🧪 Run pytest
-        working-directory: ./backend 
         run: |
           pytest -s --maxfail=1 --disable-warnings -q

@@ -1,4 +1,3 @@
-
 [tool.pysen]
 version = "0.11.0"
 
@@ -8,13 +7,17 @@ enable_flake8 = true
 enable_isort = true
 enable_mypy = false
 
+source = ["backend/"] 
+
 [tool.pysen.lint.source]
 exclude_globs = ["**/__init__.py"]
 
 [tool.pytest.ini_options]
 addopts = "-s -v"
-pythonpath = ["."]
-testpaths = ["tests"]
+
+pythonpath = ["backend"]
+
+testpaths = ["backend/tests"]
 markers = [
     "utility"
 ]
