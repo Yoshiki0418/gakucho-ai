@@ -14,7 +14,9 @@ def create_llm(provider: str, model_name: str = None):
 
 def create_tts(provider: str):
     if provider == "style-bert-vits2":
-        return StyleBertVITS2_TTS(model_dir="/workspace/backend/app/weights/tts/gakucho_ai")
+        return StyleBertVITS2_TTS(
+            model_dir="/workspace/backend/app/weights/tts/gakucho_ai"
+        )
     else:
         raise ValueError(f"Unknown TTS provider: {provider}")
 
