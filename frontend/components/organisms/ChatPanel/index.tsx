@@ -19,6 +19,7 @@ interface ChatPanelProps {
   onSend: () => void
   isSending?: boolean
   disabled?: boolean
+  speakingMessageId?: string | null
 }
 
 export default function ChatPanel({
@@ -29,6 +30,7 @@ export default function ChatPanel({
   onSend,
   isSending = false,
   disabled = false,
+  speakingMessageId = null,
 }: ChatPanelProps) {
   return (
     <Flex
@@ -54,7 +56,7 @@ export default function ChatPanel({
         $borderRadius="12px"
         $padding="8px"
       >
-        <ChatList messages={messages} width="100%" height="100%" variant='futuristic' animateGlow={true} />
+        <ChatList messages={messages} width="100%" height="100%" variant='futuristic' animateGlow={true} speakingMessageId={speakingMessageId} />
       </Flex>
 
       {/* 入力エリア */}

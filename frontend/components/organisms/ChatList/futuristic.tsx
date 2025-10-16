@@ -17,6 +17,7 @@ type ChatListFuturisticProps = {
   height?: string;
   autoScroll?: boolean;
   animateGlow?: boolean;
+  speakingMessageId?: string | null;
 };
 
 export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
@@ -25,6 +26,7 @@ export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
   height = "400px",
   autoScroll = true,
   animateGlow = true,
+  speakingMessageId = null,
 }) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -52,12 +54,17 @@ export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
         border: "1px solid rgba(0,150,255,0.3)",
       }}
     >
-
       {messages.map((msg, index) => {
         const prev = messages[index - 1];
         const hideHeader = prev?.role === msg.role;
-        const assistantClass =
-          msg.role === "assistant" && animateGlow ? "assistant-glow" : "";
+        const assistantClass = [
+          msg.role === "assistant" && msg.id === speakingMessageId
+            ? "assistant-glow"
+            : "",
+          msg.role === "assistant" && animateGlow ? "assistant-hover-glow" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
         const userClass =
           msg.role === "user" && animateGlow ? "user-hover-glow" : "";
 
@@ -95,53 +102,21 @@ export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
         );
       })}
 
-      {/* ✅ 光とエフェクト群 */}
+      {/* 光とエフェクト群 */}
       <style jsx global>{`
-        /* 🌐 外枠グロー */
-        .neon-outline {
-          position: absolute;
-          inset: 0;
-          border-radius: 20px;
-          pointer-events: none;
-          background: linear-gradient(
-            135deg,
-            rgba(0, 150, 255, 0.5),
-            rgba(0, 100, 200, 0.2),
-            rgba(0, 200, 255, 0.5)
-          );
-          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          mask-composite: exclude;
-          -webkit-mask-composite: xor;
-          padding: 1.5px;
-          animation: outerGlow 5s linear infinite;
-          opacity: 0.7;
-        }
-
-        @keyframes outerGlow {
-          0% {
-            filter: blur(4px) brightness(1.1);
-          }
-          50% {
-            filter: blur(6px) brightness(1.5);
-          }
-          100% {
-            filter: blur(4px) brightness(1.1);
-          }
-        }
-
-        /* 🌌 アシスタント発話ゆらぎ */
+        /* アシスタント発話ゆらぎ */
         @keyframes assistantGlow {
           0% {
             box-shadow: 0 0 14px rgba(0, 122, 255, 0.15),
-                        0 0 25px rgba(0, 122, 255, 0.1);
+              0 0 25px rgba(0, 122, 255, 0.1);
           }
           50% {
             box-shadow: 0 0 22px rgba(0, 180, 255, 0.35),
-                        0 0 40px rgba(0, 122, 255, 0.25);
+              0 0 40px rgba(0, 122, 255, 0.25);
           }
           100% {
             box-shadow: 0 0 14px rgba(0, 122, 255, 0.15),
-                        0 0 25px rgba(0, 122, 255, 0.1);
+              0 0 25px rgba(0, 122, 255, 0.1);
           }
         }
 
@@ -149,7 +124,16 @@ export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
           animation: assistantGlow 3s ease-in-out infinite;
         }
 
-        /* ✨ ユーザー発話ホバー時 */
+        /* アシスタント発話ホバー時 */
+        .assistant-hover-glow:hover {
+          transform: scale(1.02);
+          box-shadow:
+            0 0 25px rgba(0, 150, 255, 0.5),
+            0 0 60px rgba(0, 180, 255, 0.25);
+          border-color: rgba(0, 180, 255, 0.3);
+        }
+
+        /* ユーザー発話ホバー時 */
         .user-hover-glow:hover {
           transform: scale(1.02);
           box-shadow:
@@ -158,7 +142,7 @@ export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
           border-color: rgba(255, 255, 255, 0.2);
         }
 
-        /* ✅ 光るスクロールバー */
+        /* 光るスクロールバー */
         ::-webkit-scrollbar {
           width: 6px;
         }
