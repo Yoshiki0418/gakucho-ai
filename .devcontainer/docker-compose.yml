@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        HF_USERNAME: ${HF_USERNAME}
+        HF_TOKEN: ${HF_TOKEN}
     gpus: all
     volumes:
       - ..:/workspace:cached

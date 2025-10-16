@@ -5,7 +5,7 @@ isort<6
 black
 mypy
 pysen
-numpy
+numpy==1.26.4
 soundfile
 openai-whisper
 transformers
@@ -13,3 +13,5 @@ openai
 pytest
 pytest-asyncio
 tiktoken
+git-lfs
+style_bert_vits2
