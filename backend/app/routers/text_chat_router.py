@@ -1,9 +1,9 @@
 import asyncio
 import json
 
+from app.models import llm, tts
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from app.models import llm, tts
 
 router = APIRouter(prefix="/api/text-chat", tags=["Text Chat"])
 
@@ -21,6 +21,7 @@ async def text_chat_stream(request: Request):
 
     if llm_model or tts_voice:
         from app.models.model_registry import create_llm, create_tts
+
         _llm = create_llm(llm_provider or "openai", llm_model or "gpt-4o-mini")
         _tts = create_tts(tts_provider or "style-bert-vits2")
     else:
@@ -32,7 +33,9 @@ async def text_chat_stream(request: Request):
         text_output = await _llm.generate(user_input, history)
 
         # TTSを並行で実行
-        tts_task = asyncio.create_task(asyncio.to_thread(_tts.synthesize_to_base64, text_output))
+        tts_task = asyncio.create_task(
+            asyncio.to_thread(_tts.synthesize_to_base64, text_output)
+        )
         yield f"data: {json.dumps({'type': 'text_result', 'content': text_output})}\n\n"
 
         audio_b64 = await tts_task
@@ -56,6 +59,7 @@ async def char_stream(request: Request):
 
     if llm_model or tts_voice:
         from app.models.model_registry import create_llm, create_tts
+
         _llm = create_llm(llm_provider or "openai", llm_model or "gpt-4o-mini")
         _tts = create_tts(tts_provider or "style-bert-vits2")
     else:
@@ -79,7 +83,9 @@ async def char_stream(request: Request):
             if any(p in text_piece for p in PUNCTUATIONS):
                 # 並列で音声生成
                 current_sentence = sentence_buffer.strip()
-                audio_b64 = await asyncio.to_thread(_tts.synthesize_to_base64, current_sentence)
+                audio_b64 = await asyncio.to_thread(
+                    _tts.synthesize_to_base64, current_sentence
+                )
 
                 yield f"data: {json.dumps({'type': 'audio_chunk', 'sentence': current_sentence, 'audio': audio_b64})}\n\n"
 
@@ -88,7 +94,9 @@ async def char_stream(request: Request):
 
         # 最後に残った文を処理（句読点なしで終わった場合）
         if sentence_buffer.strip():
-            audio_b64 = await asyncio.to_thread(_tts.synthesize_to_base64, sentence_buffer.strip())
+            audio_b64 = await asyncio.to_thread(
+                _tts.synthesize_to_base64, sentence_buffer.strip()
+            )
             yield f"data: {json.dumps({'type': 'audio_chunk', 'sentence': sentence_buffer.strip(), 'audio': audio_b64})}\n\n"
 
         yield f"data: {json.dumps({'type': 'done', 'message': '応答完了'})}\n\n"
