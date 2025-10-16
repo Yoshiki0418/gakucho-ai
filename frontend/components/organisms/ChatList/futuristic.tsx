@@ -106,22 +106,31 @@ export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
       <style jsx global>{`
         /* アシスタント発話ゆらぎ */
         @keyframes assistantGlow {
-          0% {
-            box-shadow: 0 0 14px rgba(0, 122, 255, 0.15),
-              0 0 25px rgba(0, 122, 255, 0.1);
+          0%, 100% {
+            opacity: 0.9;
+            transform: scale(1);
+            filter: drop-shadow(0 0 6px rgba(0, 180, 255, 0.4))
+                    drop-shadow(0 0 14px rgba(0, 180, 255, 0.2));
           }
           50% {
-            box-shadow: 0 0 22px rgba(0, 180, 255, 0.35),
-              0 0 40px rgba(0, 122, 255, 0.25);
-          }
-          100% {
-            box-shadow: 0 0 14px rgba(0, 122, 255, 0.15),
-              0 0 25px rgba(0, 122, 255, 0.1);
+            opacity: 1;
+            transform: scale(1.04);
+            filter: drop-shadow(0 0 16px rgba(0, 200, 255, 0.55))
+                    drop-shadow(0 0 28px rgba(0, 220, 255, 0.4));
           }
         }
 
         .assistant-glow {
-          animation: assistantGlow 3s ease-in-out infinite;
+          animation: assistantGlow 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+          border-color: rgba(0, 200, 255, 0.4) !important;
+          background: radial-gradient(
+              circle at 50% 50%,
+              rgba(0, 200, 255, 0.1),
+              rgba(0, 0, 0, 0.15)
+            ),
+            linear-gradient(145deg, #0d1115, #151b22);
+          will-change: transform, filter, opacity;
+          transition: border-color 0.4s ease, background 0.4s ease;
         }
 
         /* アシスタント発話ホバー時 */
