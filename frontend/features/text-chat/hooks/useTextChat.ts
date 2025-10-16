@@ -15,7 +15,6 @@ type SSEAny = SSEText | SSEAudio | SSEDone
 
 export function useTextChat(endpoint: string) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [isSpeaking, setIsSpeaking] = useState(false)
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
 
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -29,13 +28,23 @@ export function useTextChat(endpoint: string) {
 
   const ensureAudioReady = () => {
     if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext ||
-        (window as any).webkitAudioContext)()
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+
+      if (!AudioContextClass) {
+        console.error("AudioContext not supported");
+        return;
+      }
+
+      audioCtxRef.current = new AudioContextClass();
     }
-    if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume().catch(() => {})
+
+    if (audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume().catch(() => {});
     }
-  }
+  };
 
   const b64ToArrayBuffer = (b64: string): ArrayBuffer => {
     b64 = b64.replace(/[\r\n\s]/g, '')
@@ -58,7 +67,6 @@ export function useTextChat(endpoint: string) {
     const now = ctx.currentTime
     if (playbackTimeRef.current < now) playbackTimeRef.current = now + 0.02
 
-    setIsSpeaking(true)
     if (currentAssistantIdRef.current) {
       setSpeakingMessageId(currentAssistantIdRef.current)
     }
@@ -72,7 +80,6 @@ export function useTextChat(endpoint: string) {
         const elapsed = Date.now() - lastAudioChunkTimeRef.current
         const remaining = playbackTimeRef.current - ctx.currentTime
         if (elapsed > checkDelay && remaining <= 0.5) {
-          setIsSpeaking(false)
           setSpeakingMessageId(null)
         }
       }, checkDelay)
@@ -192,7 +199,6 @@ export function useTextChat(endpoint: string) {
     es.onerror = (err) => {
       console.error('❌ SSE Error:', err)
       es.close()
-      setIsSpeaking(false)
       setSpeakingMessageId(null)
       currentAssistantIdRef.current = null
     }
@@ -222,7 +228,6 @@ export function useTextChat(endpoint: string) {
   return {
     messages,
     startChat,
-    isSpeaking,
     speakingMessageId,
   }
 }

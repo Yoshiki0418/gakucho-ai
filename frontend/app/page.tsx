@@ -8,7 +8,7 @@ export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
 
-  const { messages, startChat, speakingMessageId, isSpeaking } =
+  const { messages, startChat, speakingMessageId } =
     useTextChat('/api/text-chat/char-stream')
 
   const handleMicClick = () => {
