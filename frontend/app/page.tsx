@@ -1,77 +1,24 @@
 'use client'
 
 import React, { useState } from 'react'
-import ChatPanel from '@/components/organisms/ChatPanel' // ✅ ChatPanelを使用
-
-// 💬 デモ用メッセージデータ
-const messages = [
-  {
-    id: '1',
-    text: '学長先生、こんにちは。今日はお話しできて光栄です！',
-    role: 'user',
-  },
-  {
-    id: '2',
-    text: 'こんにちは。こちらこそ、こうして直接話せるのは嬉しいですね。入学式、緊張しましたか？',
-    role: 'assistant',
-  },
-  {
-    id: '3',
-    name: 'あなた',
-    avatarSrc: '/avatars/user.png',
-    text: 'ええ、とても緊張しました。でも先生方のお話が印象的で、モチベーションが高まりました。',
-    role: 'user',
-  },
-  {
-    id: '4',
-    name: '大澤敏',
-    avatarSrc: '/avatars/gakucho.png',
-    text: 'それは何よりですね。大学生活の始まりを良い形で迎えられたようで、私も嬉しく思います。',
-    role: 'assistant',
-  },
-  {
-    id: '5',
-    name: 'あなた',
-    avatarSrc: '/avatars/user.png',
-    text: 'これから研究室の活動も始まるので、いろいろ挑戦してみたいです！',
-    role: 'user',
-  },
-  {
-    id: '6',
-    name: '大澤敏',
-    avatarSrc: '/avatars/gakucho.png',
-    text: '素晴らしい心構えですね。ぜひ多くを学び、良い経験を積んでください。',
-    role: 'assistant',
-  },
-  {
-    id: '7',
-    name: 'あなた',
-    avatarSrc: '/avatars/user.png',
-    text: 'これから研究室の活動も始まるので、いろいろ挑戦してみたいです！',
-    role: 'user',
-  },
-  {
-    id: '8',
-    name: 'あなた',
-    avatarSrc: '/avatars/user.png',
-    text: 'これから研究室の活動も始まるので、いろいろ挑戦してみたいです！',
-    role: 'user',
-  },
-] as const;
+import ChatPanel from '@/components/organisms/ChatPanel'
+import { useTextChat } from '@/features/text-chat/hooks/useTextChat'
 
 export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
 
+  const { messages, startChat, speakingMessageId, isSpeaking } =
+    useTextChat('/api/text-chat/char-stream')
+
   const handleMicClick = () => {
     console.log('🎙️ Mic clicked')
   }
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!inputValue.trim()) return
     setIsSending(true)
-    console.log('送信:', inputValue)
-    await new Promise((r) => setTimeout(r, 1000))
+    startChat(inputValue)
     setIsSending(false)
     setInputValue('')
   }
@@ -84,20 +31,15 @@ export default function ChatDemoPage() {
         justifyContent: 'flex-start',
         height: '100vh',
         backgroundColor: '#000',
-        fontFamily: 'sans-serif',
-        padding: '0px',
       }}
     >
-      {/* ✅ ChatPanel のみを中央に表示 */}
       <section
         style={{
           display: 'flex',
-          justifyContent: 'flex-start', // ✅ 左寄せ
-          alignItems: 'stretch',         // ✅ 高さ方向を埋める
-          height: '100vh',               // ✅ 画面全体の高さに
+          justifyContent: 'flex-start',
+          alignItems: 'stretch',
+          height: '100vh',
           width: '100%',
-          margin: 0,                     // ✅ 余白をなくす
-          padding: 0,
         }}
       >
         <ChatPanel
@@ -107,6 +49,7 @@ export default function ChatDemoPage() {
           onMicClick={handleMicClick}
           onSend={handleSend}
           isSending={isSending}
+          speakingMessageId={speakingMessageId}
         />
       </section>
     </main>

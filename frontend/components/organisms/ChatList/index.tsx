@@ -19,6 +19,7 @@ type ChatListProps = {
   /** variant指定: "standard" | "futuristic" */
   variant?: 'standard' | 'futuristic';
   animateGlow?: boolean;
+  speakingMessageId?: string | null;
 };
 
 export const ChatList: React.FC<ChatListProps> = ({
