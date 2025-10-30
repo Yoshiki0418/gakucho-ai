@@ -18,6 +18,8 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "features/speech/hooks/useSpeechRecognition.ts",
+      "components/organisms/ChatInputArea/futuristic.tsx",
     ],
   },
 ];

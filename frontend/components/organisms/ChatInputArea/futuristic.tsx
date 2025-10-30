@@ -1,14 +1,14 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Box from '@/components/styles/Box'
 import InputWithMic from '@/components/molecules/InputWithMic'
 import Button from '@/components/atoms/Button'
+import { useSpeechRecognition } from '@/features/speech/hooks/useSpeechRecognition'
 
 interface ChatInputAreaProps {
   value: string
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onMicClick?: () => void
   onSend: () => void
   isSending?: boolean
   disabled?: boolean
@@ -17,27 +17,76 @@ interface ChatInputAreaProps {
 export default function ChatInputArea({
   value,
   onChange,
-  onMicClick,
   onSend,
   isSending = false,
   disabled = false,
 }: ChatInputAreaProps) {
-  const [energyActive, setEnergyActive] = useState(false)
+  const [inputValue, setInputValue] = useState(value)
   const [isRecording, setIsRecording] = useState(false)
+  const [energyActive, setEnergyActive] = useState(false)
+  const lastRecognizedRef = useRef('')
 
-  /** 🎙️ マイククリック */
-  const handleMicClick = () => {
-    setIsRecording((prev) => !prev)
-    onMicClick?.()
+  const { isListening, start, stop, reset, syncExternalText } =
+    useSpeechRecognition({
+      continuous: true,
+      onResult: (text, isFinal) => {
+        if (isFinal && text !== lastRecognizedRef.current) {
+          lastRecognizedRef.current = text
+          // 最新の state をもとに追記
+          setInputValue((prev) => {
+            const newText = (prev + ' ' + text).trim()
+            return newText
+          })
+        }
+      },
+      onError: (err) => console.error('SpeechRecognition Error:', err),
+    })
+
+  /** 手入力で同期 */
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    setInputValue(newValue)
+    syncExternalText(newValue)
   }
 
-  /** 🚀 送信時アニメーション */
+  /** state → 親同期 (useEffectで確実に) */
+  useEffect(() => {
+    onChange({ target: { value: inputValue } } as any)
+  }, [inputValue])
+
+  /** マイククリック */
+  const handleMicClick = () => {
+    if (isListening) {
+      stop()
+      setIsRecording(false)
+    } else {
+      syncExternalText(inputValue) // 今の入力内容を保持してから開始
+      lastRecognizedRef.current = ''
+      start()
+      setIsRecording(true)
+    }
+  }
+
+  /** 送信 */
   const handleSendClick = async () => {
-    if (disabled || isSending) return
+    if (disabled || isSending || !inputValue.trim()) return
+
     setEnergyActive(true)
     setTimeout(() => setEnergyActive(false), 1000)
     onSend()
+
+    // 完全リセット
+    stop()
+    reset()
+    setIsRecording(false)
+    setInputValue('')
+    lastRecognizedRef.current = ''
   }
+
+  /** 音声認識終了時のUI更新 */
+  useEffect(() => {
+    if (!isListening) setIsRecording(false)
+  }, [isListening])
 
   return (
     <div className={`chat-area ${isRecording ? 'recording' : ''}`}>
@@ -58,23 +107,20 @@ export default function ChatInputArea({
             'inset 0 1px 6px rgba(255,255,255,0.05), 0 0 20px rgba(0,150,255,0.3)',
         }}
       >
-        {/* ✨ エネルギー波紋 */}
         {energyActive && <div className="energy-wave" />}
 
-        {/* 🎧 入力部分 */}
         <InputWithMic
-          value={value}
-          onChange={onChange}
+          value={inputValue}
+          onChange={handleInputChange}
           onMicClick={handleMicClick}
           disabled={disabled}
-          placeholder="ここに入力..."
+          placeholder="話しかけるか入力してください..."
         />
 
-        {/* 🚀 送信ボタン */}
         <Button
           type="button"
           onClick={handleSendClick}
-          disabled={disabled || isSending}
+          disabled={disabled || isSending || !inputValue.trim()}
           $variants="Primary"
           $backColor="#007AFF"
           $hover_color="#339DFF"
@@ -96,17 +142,16 @@ export default function ChatInputArea({
         </Button>
       </Box>
 
-      {/* 💫 外枠グラデーション定義 */}
+      {/* アニメーション */}
       <style jsx>{`
         .chat-area {
           position: relative;
           border-radius: 24px;
-          padding: 3px; /* 光の厚み */
+          padding: 3px;
           background: rgba(0, 0, 0, 0.7);
           transition: all 0.4s ease;
         }
 
-        /* 🔥 録音中だけ外枠が流れる */
         .chat-area.recording {
           background: linear-gradient(
             90deg,
@@ -117,16 +162,7 @@ export default function ChatInputArea({
           );
           background-size: 300% 300%;
           animation: borderFlow 3s linear infinite;
-          padding: 3px;
-          border-radius: 24px;
           box-shadow: 0 0 20px rgba(0, 170, 255, 0.5);
-        }
-
-        /* ChatInputArea全体のBox部分 */
-        .chat-area > :global(div) {
-          background: #1b1b1b;
-          border-radius: 20px;
-          height: 100%;
         }
 
         @keyframes borderFlow {
@@ -157,7 +193,6 @@ export default function ChatInputArea({
           border-radius: 50%;
           pointer-events: none;
           animation: energyPulse 1s ease-out forwards;
-          z-index: 0;
         }
 
         @keyframes energyPulse {
