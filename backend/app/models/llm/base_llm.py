@@ -9,12 +9,14 @@ PromptContext = Union[str, List[Dict[str, str]]]
 class BaseLLM(ABC):
     """LLM応答生成モジュールの抽象基底クラス。"""
 
-    _model_name: str
-    _system_prompt: str = (
-        "あなたは金沢工業大学の学長です。"
-        "常に相手の意図を正確に理解し、思いやりのある自然な言葉で説明します。"
-        "ユーザーを生徒として話し、長すぎる説明は避け、テンポよく短めの発言を心がけてください。"
-    )
+    def __init__(self, model_name: str, system_prompt: str):
+        """
+        Args:
+            model_name: モデル名（例：'gpt-4o-mini', 'gemma-2-27b', etc.）
+            system_prompt: システムプロンプト（指定しない場合はデフォルト人格）
+        """
+        self._model_name = model_name
+        self._system_prompt = system_prompt
 
     @property
     def model_name(self) -> str:
@@ -60,7 +62,7 @@ class BaseLLM(ABC):
     async def generate(
         self,
         message: str,
-        history: List[Dict[str, str]],
+        history: Optional[List[Dict[str, str]]] = None,
         tool_calls: Optional[List[Dict[str, str]]] = None,
         *,
         token_count: bool = False,
@@ -92,7 +94,7 @@ class BaseLLM(ABC):
     async def stream_generate(
         self,
         message: str,
-        history: List[Dict[str, str]],
+        history: Optional[List[Dict[str, str]]] = None,
         tool_calls: Optional[List[Dict[str, str]]] = None,
     ) -> AsyncIterator[str]:
         """トークンまたは文チャンクを ``async for`` で逐次返す。"""

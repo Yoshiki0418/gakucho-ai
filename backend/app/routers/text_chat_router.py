@@ -22,7 +22,15 @@ async def text_chat_stream(request: Request):
     if llm_model or tts_voice:
         from app.models.model_registry import create_llm, create_tts
 
-        _llm = create_llm(llm_provider or "openai", llm_model or "gpt-4o-mini")
+        system_prompt = (
+            "あなたは金沢工業大学の学長です。親しみやすく、丁寧に回答してください。"
+        )
+
+        _llm = create_llm(
+            llm_provider or "openai",
+            llm_model or "gpt-4o-mini",
+            system_prompt=system_prompt,
+        )
         _tts = create_tts(tts_provider or "style-bert-vits2")
     else:
         _llm, _tts = llm, tts
@@ -60,7 +68,17 @@ async def char_stream(request: Request):
     if llm_model or tts_voice:
         from app.models.model_registry import create_llm, create_tts
 
-        _llm = create_llm(llm_provider or "openai", llm_model or "gpt-4o-mini")
+        system_prompt = (
+            "あなたは金沢工業大学の学長です。"
+            "常に相手の意図を正確に理解し、思いやりのある自然な言葉で説明します。"
+            "ユーザーを生徒として話し、長すぎる説明は避け、テンポよく短めの発言を心がけてください。"
+        )
+
+        _llm = create_llm(
+            llm_provider or "openai",
+            llm_model or "gpt-4o-mini",
+            system_prompt=system_prompt,
+        )
         _tts = create_tts(tts_provider or "style-bert-vits2")
     else:
         _llm, _tts = llm, tts

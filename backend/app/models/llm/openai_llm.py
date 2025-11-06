@@ -16,7 +16,12 @@ openai_streaming_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 class OpenAILLM(BaseLLM):
     """OpenAI Chat APIを利用したLLM実装クラス"""
 
-    def __init__(self, model_name: str = "gpt-4o-mini"):
+    def __init__(
+        self,
+        system_prompt: str,
+        model_name: str = "gpt-4o-mini",
+    ):
+        self._system_prompt = system_prompt
         self._model_name = model_name
 
     # ───────────────────────────────
@@ -26,14 +31,15 @@ class OpenAILLM(BaseLLM):
         self,
         message: str,
         system_prompt: str,
-        history: List[Dict[str, str]],
+        history: Optional[List[Dict[str, str]]] = None,
         tool_calls: Optional[List[Dict[str, str]]] = None,
     ) -> PromptContext:
         """
         OpenAI形式（messages形式）でコンテキストを構築する。
         """
         messages = [{"role": "system", "content": system_prompt}]
-        messages += history
+        if history is not None:
+            messages += history
         messages.append({"role": "user", "content": message})
 
         # ツールコール（関数呼び出しなど）がある場合に拡張
@@ -48,7 +54,7 @@ class OpenAILLM(BaseLLM):
     async def _generate_impl(
         self,
         message: PromptContext,
-        history: List[Dict[str, str]],
+        history: Optional[List[Dict[str, str]]] = None,
         tool_calls: Optional[List[Dict[str, str]]] = None,
         max_tokens: int = 150,
         temperature: float = 0.8,
@@ -74,7 +80,7 @@ class OpenAILLM(BaseLLM):
     async def stream_generate(
         self,
         message: str,
-        history: List[Dict[str, str]],
+        history: Optional[List[Dict[str, str]]] = None,
         tool_calls: Optional[List[Dict[str, str]]] = None,
         max_tokens: int = 150,
         temperature: float = 0.8,
