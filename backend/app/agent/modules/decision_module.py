@@ -1,5 +1,6 @@
 # agent/decision_manager.py
 from __future__ import annotations
+
 from typing import Any, Dict, Optional
 
 from app.models.llm import OpenAILLM
@@ -28,7 +29,9 @@ class DecisionManager:
     # ==========================================================
     # メイン処理
     # ==========================================================
-    async def decide(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def decide(
+        self, user_input: str, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         ユーザー入力を受け取り、RAGまたは通常対話を選択して応答を生成する。
         """
@@ -41,7 +44,9 @@ class DecisionManager:
     # ==========================================================
     # LLMベースの意図分類
     # ==========================================================
-    async def _analyze_intent(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> str:
+    async def _analyze_intent(
+        self, user_input: str, context: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         LLMを用いた意図分類。
         入力文の意味に基づいて "rag" または "dialogue" を推定する。
