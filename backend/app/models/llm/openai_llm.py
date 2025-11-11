@@ -1,5 +1,5 @@
 import os
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, List, Optional
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI, OpenAI
@@ -31,8 +31,8 @@ class OpenAILLM(BaseLLM):
         self,
         message: str,
         system_prompt: str,
-        history: Optional[List[Dict[str, str]]] = None,
-        tool_calls: Optional[List[Dict[str, str]]] = None,
+        history: Optional[List[dict[str, str]]] = None,
+        tool_calls: Optional[List[dict[str, str]]] = None,
     ) -> PromptContext:
         """
         OpenAI形式（messages形式）でコンテキストを構築する。
@@ -54,8 +54,8 @@ class OpenAILLM(BaseLLM):
     async def _generate_impl(
         self,
         message: PromptContext,
-        history: Optional[List[Dict[str, str]]] = None,
-        tool_calls: Optional[List[Dict[str, str]]] = None,
+        history: Optional[List[dict[str, str]]] = None,
+        tool_calls: Optional[List[dict[str, str]]] = None,
         max_tokens: int = 150,
         temperature: float = 0.8,
     ) -> str:
@@ -80,8 +80,8 @@ class OpenAILLM(BaseLLM):
     async def stream_generate(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-        tool_calls: Optional[List[Dict[str, str]]] = None,
+        history: Optional[List[dict[str, str]]] = None,
+        tool_calls: Optional[List[dict[str, str]]] = None,
         max_tokens: int = 150,
         temperature: float = 0.8,
     ) -> AsyncIterator[str]:
