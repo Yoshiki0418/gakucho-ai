@@ -13,26 +13,26 @@
 以下は、ダミー応答を返す最小構成の例です👇
 
 ```
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, dict, List, Optional
 from .base_llm import BaseLLM
 
 class DummyLLM(BaseLLM):
     def __init__(self):
         self._model_name = "dummy-llm"
 
-    def build_context(self, message: str, system_prompt: str, history: List[Dict[str, str]], tool_calls=None):
+    def build_context(self, message: str, system_prompt: str, history: List[dict[str, str]], tool_calls=None):
         # シンプルにシステムプロンプトと履歴、現在のメッセージを連結
         context = [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": message}]
         return context
 
-    async def _generate_impl(self, message: str, history: List[Dict[str, str]], tool_calls=None) -> str:
+    async def _generate_impl(self, message: str, history: List[dict[str, str]], tool_calls=None) -> str:
         # 本来はモデル呼び出しを行うが、ここでは固定応答を返す
         return f"『{message}』に対するダミー応答です。"
 
     async def stream_generate(
         self,
         message: str,
-        history: List[Dict[str, str]],
+        history: List[dict[str, str]],
         tool_calls=None,
     ) -> AsyncIterator[str]:
         # 実際はモデルからのストリーミングを処理する

@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Dict, List, Optional, Union
+from typing import AsyncIterator, List, Optional, Union
 
 from .utils import GenerationResult, get_tokenizer
 
-PromptContext = Union[str, List[Dict[str, str]]]
+PromptContext = Union[str, List[dict[str, str]]]
 
 
 class BaseLLM(ABC):
@@ -40,8 +40,8 @@ class BaseLLM(ABC):
         self,
         message: str,
         system_prompt: str,
-        history: List[Dict[str, str]],
-        tool_calls: Optional[List[Dict[str, str]]] = None,
+        history: List[dict[str, str]],
+        tool_calls: Optional[List[dict[str, str]]] = None,
     ) -> PromptContext:
         """履歴と発話を結合してプロンプトコンテキストを構築"""
         ...
@@ -50,8 +50,10 @@ class BaseLLM(ABC):
     async def _generate_impl(
         self,
         message: str,
-        history: List[Dict[str, str]],
-        tool_calls: Optional[List[Dict[str, str]]] = None,
+        history: List[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        tool_calls: Optional[List[dict[str, str]]] = None,
     ) -> str:
         """内部的な生成処理本体。messageを入力に応答を返す。"""
         ...
@@ -62,10 +64,12 @@ class BaseLLM(ABC):
     async def generate(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-        tool_calls: Optional[List[Dict[str, str]]] = None,
+        history: Optional[List[dict[str, str]]] = None,
+        tool_calls: Optional[List[dict[str, str]]] = None,
         *,
         token_count: bool = False,
+        max_tokens: int = 150,
+        temperature: float = 0.8,
     ) -> str | GenerationResult:
         """
         LLMによる全文（完了形）応答を返す。
@@ -88,14 +92,16 @@ class BaseLLM(ABC):
                 completion_tokens=completion_tokens,
             )
 
-        return await self._generate_impl(message, history, tool_calls)
+        return await self._generate_impl(
+            message, history, tool_calls, max_tokens, temperature
+        )
 
     @abstractmethod
     async def stream_generate(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-        tool_calls: Optional[List[Dict[str, str]]] = None,
+        history: Optional[List[dict[str, str]]] = None,
+        tool_calls: Optional[List[dict[str, str]]] = None,
     ) -> AsyncIterator[str]:
         """トークンまたは文チャンクを ``async for`` で逐次返す。"""
         raise NotImplementedError(
