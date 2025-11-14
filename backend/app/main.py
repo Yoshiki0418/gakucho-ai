@@ -1,4 +1,4 @@
-from app.routers import audio_stream_router, text_chat_router
+from app.routers import audio_stream_router, rag_router, text_chat_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -30,6 +30,7 @@ app = FastAPI(
 origins = [
     "http://localhost:3001",
     "http://127.0.0.1:3001",
+    "http://192.168.29.16:3000",
     #     "https://gakucho-ai.vercel.app",  # 本番フロント想定
 ]
 
@@ -46,6 +47,7 @@ app.add_middleware(
 # =========================================================
 app.include_router(text_chat_router.router)
 app.include_router(audio_stream_router.router)
+app.include_router(rag_router.router)
 
 
 # =========================================================

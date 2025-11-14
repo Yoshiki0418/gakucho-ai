@@ -15,3 +15,9 @@ pytest-asyncio
 tiktoken
 git-lfs
 style_bert_vits2
+sentence_transformers
+pandas
+protobuf
+psycopg2-binary
+sentencepiece
+python-multipart

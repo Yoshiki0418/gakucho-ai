@@ -17,3 +17,13 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    networks:
+      - default
+      - shared_db 
+
+networks:
+  default:
+    driver: bridge
+  shared_db:
+    external: true
+    name: gakucho-ai_db_network
