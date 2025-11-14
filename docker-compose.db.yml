@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  db:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    container_name: gakucho_prod_db
+    env_file:
+      - .env.prod
+    ports:
+      - "${POSTGRES_PORT}:5432" 
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - db_network
+
+networks:
+  db_network:
+    driver: bridge
