@@ -27,5 +27,17 @@ export const base44 = {
       if (!res.ok) throw new Error("Failed to fetch recent updates");
       return res.json();
     },
+    query: async ({ query, top_k = 5, threshold = 0.25 }) => {
+      const res = await fetch("http://localhost:8000/rag/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query, top_k, threshold }),
+      });
+
+      if (!res.ok) throw new Error("RAG query failed");
+      return res.json();
+    },
   },
 };
