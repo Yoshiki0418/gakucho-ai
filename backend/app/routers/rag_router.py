@@ -3,9 +3,11 @@ import shutil
 import tempfile
 
 import psycopg2
+from app.rag.retriever import Retriever
 from app.rag.store import RAGStore
 from dotenv import load_dotenv
 from fastapi import APIRouter, File, Form, UploadFile
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/rag", tags=["RAG"])
 
@@ -98,3 +100,29 @@ async def get_recent_updates(limit: int = 10):
         }
         for r in rows
     ]
+
+
+class QueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    threshold: float = 0.25
+
+
+retriever = Retriever(DB_URL)
+
+
+@router.post("/query")
+async def query_rag(req: QueryRequest):
+    """
+    RAG 検索テスト用エンドポイント
+    """
+    try:
+        results = retriever.search(
+            query=req.query,
+            top_k=req.top_k,
+            threshold=req.threshold,
+        )
+        return results
+
+    except Exception as e:
+        return {"error": str(e)}
