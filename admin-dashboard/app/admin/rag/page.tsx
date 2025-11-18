@@ -6,6 +6,7 @@ import CSVUploadCard from "./components/CSVUploadCard";
 import StatsCards from "./components/StatsCards";
 import SourceChart from "./components/SourceChart";
 import RecentUpdates from "./components/RecentUpdates";
+import SearchTester from "./components/SearchTester";
 import { base44 } from "@/lib/base44Client";
 
 export default function RAGDashboard() {
@@ -74,6 +75,8 @@ export default function RAGDashboard() {
           }}
           isLoading={isLoading}
         />
+
+        <SearchTester />
 
           <div className="grid lg:grid-cols-2 gap-6">
             <SourceChart
