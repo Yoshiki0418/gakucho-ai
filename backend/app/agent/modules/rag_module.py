@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import List, Optional, Dict, Any, AsyncIterator
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-from app.rag.retriever import Retriever
 from app.models.llm import BaseLLM
+from app.rag.retriever import Retriever
 
 
 class RAGModule:
@@ -63,8 +63,10 @@ class RAGModule:
 
         # --- コンテキスト整形 ---
         context_text = "\n\n".join(
-            [f"[{i+1}] (score={d['similarity']:.3f})\n{d['context']}"
-             for i, d in enumerate(retrieved_docs)]
+            [
+                f"[{i+1}] (score={d['similarity']:.3f})\n{d['context']}"
+                for i, d in enumerate(retrieved_docs)
+            ]
         )
 
         # --- テンプレート置換 ---
