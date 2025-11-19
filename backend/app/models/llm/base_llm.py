@@ -102,6 +102,8 @@ class BaseLLM(ABC):
         message: str,
         history: Optional[List[dict[str, str]]] = None,
         tool_calls: Optional[List[dict[str, str]]] = None,
+        max_tokens: int = 150,
+        temperature: float = 0.8,
     ) -> AsyncIterator[str]:
         """トークンまたは文チャンクを ``async for`` で逐次返す。"""
         raise NotImplementedError(
