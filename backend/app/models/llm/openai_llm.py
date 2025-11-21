@@ -32,7 +32,6 @@ class OpenAILLM(BaseLLM):
         message: str,
         system_prompt: str,
         history: Optional[List[dict[str, str]]] = None,
-        tool_calls: Optional[List[dict[str, str]]] = None,
     ) -> PromptContext:
         """
         OpenAI形式（messages形式）でコンテキストを構築する。
@@ -41,10 +40,6 @@ class OpenAILLM(BaseLLM):
         if history is not None:
             messages += history
         messages.append({"role": "user", "content": message})
-
-        # ツールコール（関数呼び出しなど）がある場合に拡張
-        if tool_calls:
-            messages.append({"role": "system", "content": f"[tool_calls] {tool_calls}"})
 
         return messages
 
@@ -61,13 +56,15 @@ class OpenAILLM(BaseLLM):
     ) -> str:
         """OpenAIのChatCompletion APIを利用して応答を生成"""
 
-        messages = self.build_context(message, self._system_prompt, history, tool_calls)
+        messages = self.build_context(message, self._system_prompt, history)
 
         print(messages)
 
         response = openai_client.chat.completions.create(
             model=self._model_name,
             messages=messages,
+            tools=tool_calls,
+            tool_choice="auto",
             max_tokens=max_tokens,
             temperature=temperature,
         )

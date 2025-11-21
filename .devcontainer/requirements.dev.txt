@@ -21,3 +21,4 @@ protobuf
 psycopg2-binary
 sentencepiece
 python-multipart
+openai-agents

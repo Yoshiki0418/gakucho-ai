@@ -41,7 +41,6 @@ class BaseLLM(ABC):
         message: str,
         system_prompt: str,
         history: List[dict[str, str]],
-        tool_calls: Optional[List[dict[str, str]]] = None,
     ) -> PromptContext:
         """履歴と発話を結合してプロンプトコンテキストを構築"""
         ...
