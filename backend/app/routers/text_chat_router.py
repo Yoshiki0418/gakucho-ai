@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.models import llm, tts
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -92,6 +93,60 @@ async def char_stream(request: Request):
 
         # LLMのストリーミング出力を逐次処理
         async for chunk in _llm.stream_generate(user_input, history):
+            text_piece = str(chunk)
+            sentence_buffer += text_piece
+
+            yield f"data: {json.dumps({'type': 'text_chunk', 'content': text_piece})}\n\n"
+
+            # 文の終端を検出したら、その文をTTSに渡す
+            if any(p in text_piece for p in PUNCTUATIONS):
+                # 並列で音声生成
+                current_sentence = sentence_buffer.strip()
+                audio_b64 = await asyncio.to_thread(
+                    _tts.synthesize_to_base64, current_sentence
+                )
+
+                yield f"data: {json.dumps({'type': 'audio_chunk', 'sentence': current_sentence, 'audio': audio_b64})}\n\n"
+
+                # 文バッファをリセット
+                sentence_buffer = ""
+
+        # 最後に残った文を処理（句読点なしで終わった場合）
+        if sentence_buffer.strip():
+            audio_b64 = await asyncio.to_thread(
+                _tts.synthesize_to_base64, sentence_buffer.strip()
+            )
+            yield f"data: {json.dumps({'type': 'audio_chunk', 'sentence': sentence_buffer.strip(), 'audio': audio_b64})}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done', 'message': '応答完了'})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.get("/char-stream-agent")
+async def char_stream_agent(request: Request):
+    user_input = request.query_params.get("text", "こんにちは！")
+    # history = request.query_params.get("history", [])
+
+    # モデル選択（オプション）
+    tts_provider = request.query_params.get("tts_provider", None)
+    tts_voice = request.query_params.get("tts_voice", None)
+    agent = GeneralConversationAgent()
+
+    if tts_voice:
+        from app.models.model_registry import create_tts
+
+        _tts = create_tts(tts_provider or "style-bert-vits2")
+    else:
+        _tts = tts
+
+    PUNCTUATIONS = {"。", "！", "？", "!", "?"}
+
+    async def event_stream():
+        sentence_buffer = ""
+
+        # LLMのストリーミング出力を逐次処理
+        async for chunk in agent.stream_generate(user_id="1", message=user_input):
             text_piece = str(chunk)
             sentence_buffer += text_piece
 

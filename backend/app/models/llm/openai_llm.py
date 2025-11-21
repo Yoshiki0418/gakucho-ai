@@ -84,7 +84,7 @@ class OpenAILLM(BaseLLM):
     ) -> AsyncIterator[str]:
         """OpenAI APIのストリームモードを利用して逐次出力"""
 
-        messages = self.build_context(message, self._system_prompt, history, tool_calls)
+        messages = self.build_context(message, self._system_prompt, history)
 
         # OpenAI 非同期ストリーム
         stream = await openai_streaming_client.chat.completions.create(
