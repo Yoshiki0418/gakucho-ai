@@ -9,7 +9,7 @@ export default function ChatDemoPage() {
   const [isSending, setIsSending] = useState(false)
 
   const { messages, startChat, speakingMessageId } =
-    useTextChat('/api/text-chat/char-stream')
+    useTextChat('/api/text-chat/char-stream-agent')
 
   const handleMicClick = () => {
     console.log('🎙️ Mic clicked')
