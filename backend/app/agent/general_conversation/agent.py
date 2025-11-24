@@ -2,7 +2,11 @@ import os
 from typing import AsyncIterator
 
 from agents import Agent, Runner
-from app.agent.general_conversation.domains import LifePlanningAgent, ResearchAgent
+from app.agent.general_conversation.domains import (
+    LifePlanningAgent,
+    LocationAgent,
+    ResearchAgent,
+)
 from app.agent.general_conversation.tools import get_current_time, get_weather
 from dotenv import load_dotenv
 
@@ -28,7 +32,7 @@ class GeneralConversationAgent:
         research_agent: ResearchAgent,
         life_planning_agent: LifePlanningAgent,
         # reasoning_agent: ReasoningAgent,
-        # location_agent: LocationAgent,
+        location_agent: LocationAgent,
     ):
         self.agent = Agent(
             name="GeneralConversationAgent",
@@ -109,7 +113,7 @@ class GeneralConversationAgent:
                 - ユーザーの意図を取りこぼさない
             """,
             tools=[get_current_time, get_weather],
-            handoffs=[research_agent, life_planning_agent],
+            handoffs=[research_agent, life_planning_agent, location_agent],
         )
         # self.domain_agents: dict[str, Agent] = {
         #     "research": research_agent,
