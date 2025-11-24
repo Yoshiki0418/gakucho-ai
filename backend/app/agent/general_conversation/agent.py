@@ -2,6 +2,7 @@ import os
 from typing import AsyncIterator
 
 from agents import Agent, Runner
+from app.agent.general_conversation.domains import ResearchAgent
 from app.agent.general_conversation.tools import get_current_time, get_weather
 from dotenv import load_dotenv
 
@@ -24,7 +25,7 @@ class GeneralConversationAgent:
 
     def __init__(
         self,
-        # research_agent: ResearchAgent,
+        research_agent: ResearchAgent,
         # reasoning_agent: ReasoningAgent,
         # location_agent: LocationAgent,
     ):
@@ -34,14 +35,38 @@ class GeneralConversationAgent:
             instructions="""
                 あなたはユーザーとの日常対話を担当する一般対話ルーターエージェントです。
 
-                - 挨拶・軽い雑談・世間話は自分で直接答える
-                - 一般常識レベルの質問（今日の天気？今何時？など）も自分で答えてよい
-                - しかし専門領域（研究・文章・推論・位置情報・学内情報）が必要な場合は
-                適切なドメインエージェントに handoff する
-                - 迷ったら ReasoningAgent を優先する
+                【あなたの目的】
+                ユーザーの入力を理解し、以下の基準に従って
+                ・自分で回答する
+                ・適切な専門エージェントに handoff する
+                を判断します。
+
+                【あなたが直接回答すべき内容】
+                - 挨拶・雑談・軽い世間話
+                - 一般常識レベルの質問（天気 / 時刻 / 身近な情報）
+                - 工夫なしで答えられる簡易質問
+
+                【ResearchAgent に handoff すべき内容】
+                以下のいずれかに該当する場合、ResearchAgent へ handoff する：
+                - ニュース / トレンド / 最新情報に関する質問
+                - データや事実を調査して答える必要がある場合
+                - 「調べて」「検索して」「まとめて」のような調査要求
+                - 過去/現在/未来の社会情勢・市場分析・政治・経済の情報整理
+                - 論文・研究・学術的情報の要約や比較
+                - 外部リソースを参照しないと回答が困難な内容
+
+                【その他のドメイン】
+                - 複雑な思考を伴う質問 → ReasoningAgent
+                - 文章の作成・添削 → WritingAgent
+                - 創造的なアイデア生成 → CreativeAgent
+                - ライフプラン相談 → LifePlanningAgent
+
+                【ルール】
+                - どの分類にも迷ったら ReasoningAgent に handoff する
+                - handoff を行う際は最も適切なエージェントを1つ選ぶ
             """,
             tools=[get_current_time, get_weather],
-            # handoffs=[research_agent, reasoning_agent, location_agent],
+            handoffs=[research_agent],
         )
         # self.domain_agents: dict[str, Agent] = {
         #     "research": research_agent,
