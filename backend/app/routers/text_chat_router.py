@@ -2,7 +2,11 @@ import asyncio
 import json
 
 from app.agent.general_conversation.agent import GeneralConversationAgent
-from app.agent.general_conversation.domains import LifePlanningAgent, ResearchAgent
+from app.agent.general_conversation.domains import (
+    LifePlanningAgent,
+    LocationAgent,
+    ResearchAgent,
+)
 from app.models import llm, tts
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -134,7 +138,10 @@ async def char_stream_agent(request: Request):
     tts_voice = request.query_params.get("tts_voice", None)
     research_agent = ResearchAgent()
     life_planning_agent = LifePlanningAgent()
-    agent = GeneralConversationAgent(research_agent.agent, life_planning_agent.agent)
+    location_agent = LocationAgent()
+    agent = GeneralConversationAgent(
+        research_agent.agent, life_planning_agent.agent, location_agent.agent
+    )
 
     if tts_voice:
         from app.models.model_registry import create_tts
