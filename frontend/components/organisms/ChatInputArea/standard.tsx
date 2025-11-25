@@ -9,7 +9,7 @@ interface ChatInputAreaProps {
   value: string
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onMicClick?: () => void
-  onSend: () => void
+  onSend: (value: string) => void
   isSending?: boolean
   disabled?: boolean
 }
@@ -44,7 +44,7 @@ export default function ChatInputArea({
       {/* 送信ボタン（横幅いっぱい・下配置） */}
       <Button
         type="button"
-        onClick={onSend}
+        onClick={() => onSend(value)}
         disabled={disabled || isSending}
         $variants="Primary"
         $backColor="#007AFF"

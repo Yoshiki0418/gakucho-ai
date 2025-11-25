@@ -1,169 +1,74 @@
-'use client';
-import React, { useEffect, useRef } from "react";
-import Flex from "@/components/styles/Flex";
-import { MessageItem } from "@/components/organisms/MessageItem";
+'use client'
+
+import React, { useEffect, useMemo, useRef } from 'react'
+import Flex from '@/components/styles/Flex'
+import { MessageBubble } from '@/components/organisms/MessageBubble'
 
 type ChatMessage = {
-  id: string;
-  name?: string;
-  text: string;
-  avatarSrc?: string;
-  role?: "user" | "assistant";
-};
+  id: string
+  name?: string
+  text: string
+  avatarSrc?: string
+  role?: 'user' | 'assistant'
+}
 
 type ChatListFuturisticProps = {
-  messages: readonly ChatMessage[];
-  width?: string;
-  height?: string;
-  autoScroll?: boolean;
-  animateGlow?: boolean;
-  speakingMessageId?: string | null;
-};
+  messages: readonly ChatMessage[]
+  width?: string
+  height?: string
+  speakingMessageId?: string | null
+}
 
 export const ChatListFuturistic: React.FC<ChatListFuturisticProps> = ({
   messages,
-  width = "100%",
-  height = "400px",
-  autoScroll = true,
-  animateGlow = true,
+  width = '100%',
+  height = '100%',
   speakingMessageId = null,
 }) => {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null)
+
+  const lastMessageKey = useMemo(() => {
+    const last = messages[messages.length - 1]
+    if (!last) return 'none'
+    return `${last.id ?? 'no-id'}:${last.text?.length ?? 0}`
+  }, [messages])
 
   useEffect(() => {
-    if (autoScroll && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, autoScroll]);
+    if (!bottomRef.current) return
+    bottomRef.current.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end',
+    })
+  }, [lastMessageKey])
 
   return (
     <Flex
-      ref={scrollRef}
       $flex_direction="column"
       $width={width}
       $height={height}
       $gap="14px"
       $padding="20px"
-      $overflow="auto"
-      $backgroundColor="rgba(20, 20, 25, 0.7)"
-      $borderRadius="20px"
-      $boxShadow="inset 0 1px 6px rgba(255,255,255,0.08), 0 6px 25px rgba(0,0,0,0.6)"
+      $overflow="visible"
+      $backgroundColor="transparent"
+      $borderRadius="0px"
+      $boxShadow="none"
       style={{
-        position: "relative",
-        backdropFilter: "blur(12px)",
-        border: "1px solid rgba(0,150,255,0.3)",
+        position: 'relative',
+        backdropFilter: 'none',
+        border: 'none',
       }}
     >
-      {messages.map((msg, index) => {
-        const prev = messages[index - 1];
-        const hideHeader = prev?.role === msg.role;
-        const assistantClass = [
-          msg.role === "assistant" && msg.id === speakingMessageId
-            ? "assistant-glow"
-            : "",
-          msg.role === "assistant" && animateGlow ? "assistant-hover-glow" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-        const userClass =
-          msg.role === "user" && animateGlow ? "user-hover-glow" : "";
+      {messages.map((msg, index) => (
+        <MessageBubble
+          key={msg.id}
+          message={msg}
+          index={index}
+          isSpeaking={msg.id === speakingMessageId}
+        />
+      ))}
 
-        return (
-          <div
-            key={msg.id}
-            className={`${assistantClass} ${userClass}`}
-            style={{
-              background:
-                msg.role === "user"
-                  ? "linear-gradient(145deg, #181818, #222)"
-                  : "linear-gradient(145deg, #0d1115, #151b22)",
-              padding: "12px 16px",
-              borderRadius: "14px",
-              border:
-                msg.role === "assistant"
-                  ? "1px solid rgba(0,122,255,0.25)"
-                  : "1px solid rgba(255,255,255,0.06)",
-              backdropFilter: "blur(6px)",
-              boxShadow:
-                msg.role === "assistant"
-                  ? "0 0 20px rgba(0,122,255,0.3)"
-                  : "0 4px 10px rgba(0,0,0,0.3)",
-              transition: "all 0.3s ease",
-            }}
-          >
-            <MessageItem
-              name={msg.name}
-              avatarSrc={msg.avatarSrc}
-              text={msg.text}
-              role={msg.role}
-              hideHeader={hideHeader}
-            />
-          </div>
-        );
-      })}
-
-      {/* 光とエフェクト群 */}
-      <style jsx global>{`
-        /* アシスタント発話ゆらぎ */
-        @keyframes assistantGlow {
-          0%, 100% {
-            opacity: 0.9;
-            transform: scale(1);
-            filter: drop-shadow(0 0 6px rgba(0, 180, 255, 0.4))
-                    drop-shadow(0 0 14px rgba(0, 180, 255, 0.2));
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.04);
-            filter: drop-shadow(0 0 16px rgba(0, 200, 255, 0.55))
-                    drop-shadow(0 0 28px rgba(0, 220, 255, 0.4));
-          }
-        }
-
-        .assistant-glow {
-          animation: assistantGlow 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-          border-color: rgba(0, 200, 255, 0.4) !important;
-          background: radial-gradient(
-              circle at 50% 50%,
-              rgba(0, 200, 255, 0.1),
-              rgba(0, 0, 0, 0.15)
-            ),
-            linear-gradient(145deg, #0d1115, #151b22);
-          will-change: transform, filter, opacity;
-          transition: border-color 0.4s ease, background 0.4s ease;
-        }
-
-        /* アシスタント発話ホバー時 */
-        .assistant-hover-glow:hover {
-          transform: scale(1.02);
-          box-shadow:
-            0 0 25px rgba(0, 150, 255, 0.5),
-            0 0 60px rgba(0, 180, 255, 0.25);
-          border-color: rgba(0, 180, 255, 0.3);
-        }
-
-        /* ユーザー発話ホバー時 */
-        .user-hover-glow:hover {
-          transform: scale(1.02);
-          box-shadow:
-            0 0 25px rgba(255, 255, 255, 0.4),
-            0 0 60px rgba(255, 255, 255, 0.15);
-          border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        /* 光るスクロールバー */
-        ::-webkit-scrollbar {
-          width: 6px;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: linear-gradient(180deg, #007aff, #00c6ff);
-          border-radius: 3px;
-          box-shadow: 0 0 8px rgba(0, 122, 255, 0.5);
-        }
-        ::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-        }
-      `}</style>
+      {/* 一番下のダミー – ここまでスクロールさせる */}
+      <div ref={bottomRef} />
     </Flex>
-  );
-};
+  )
+}

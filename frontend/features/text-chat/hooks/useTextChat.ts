@@ -26,6 +26,13 @@ export function useTextChat(endpoint: string) {
   const playbackTimeRef = useRef<number>(0)
   const queueClearedRef = useRef<boolean>(false)
 
+  const resetChat = () => {
+    stopAllAudio()
+    setMessages([])
+    setSpeakingMessageId(null)
+    currentAssistantIdRef.current = null
+  }
+
   const ensureAudioReady = () => {
     if (!audioCtxRef.current) {
       const AudioContextClass =
@@ -229,5 +236,6 @@ export function useTextChat(endpoint: string) {
     messages,
     startChat,
     speakingMessageId,
+    resetChat,
   }
 }

@@ -20,6 +20,7 @@ const eslintConfig = [
       "next-env.d.ts",
       "features/speech/hooks/useSpeechRecognition.ts",
       "components/organisms/ChatInputArea/futuristic.tsx",
+      "components/organisms/VoiceInputArea/index.tsx",
     ],
   },
 ];
