@@ -8,19 +8,30 @@ export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
 
-  const { messages, startChat, speakingMessageId } =
-    useTextChat('/api/text-chat/char-stream-agent')
+  const { messages, startChat, speakingMessageId, resetChat } =
+  useTextChat('/api/text-chat/char-stream-agent')
 
   const handleMicClick = () => {
     console.log('🎙️ Mic clicked')
   }
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return
+  const handleSend = async (value: string) => {
+    const message = value.trim()
+    if (!message) return
+
     setIsSending(true)
-    startChat(inputValue)
-    setIsSending(false)
+    try {
+      await startChat(message)
+    } finally {
+      setIsSending(false)
+    }
+
     setInputValue('')
+  }
+
+  const handleTemplateClick = (text: string) => {
+    setInputValue(text)
+    handleSend(text)
   }
 
   return (
@@ -31,6 +42,7 @@ export default function ChatDemoPage() {
         justifyContent: 'flex-start',
         height: '100vh',
         backgroundColor: '#000',
+        overflow: 'hidden',
       }}
     >
       <section
@@ -47,8 +59,10 @@ export default function ChatDemoPage() {
           inputValue={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onMicClick={handleMicClick}
-          onSend={handleSend}
+          onTemplateClick={handleTemplateClick}
+          onSend={handleSend}      
           isSending={isSending}
+          onResetChat={resetChat} 
           speakingMessageId={speakingMessageId}
         />
       </section>

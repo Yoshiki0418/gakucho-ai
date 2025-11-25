@@ -60,6 +60,21 @@ button {
   background: none; /* 背景をリセット */
   font-family: 'Crimson Text', serif;
 }
+
+.gakucho-markdown {
+  color: #E5E7EB; /* デフォルト色（assistant のメッセージ） */
+}
+
+.gakucho-markdown * {
+  color: inherit !important;
+}
+
+.gakucho-markdown code {
+  background: rgba(255,255,255,0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+}
 `
 
 export default GlobalStyles

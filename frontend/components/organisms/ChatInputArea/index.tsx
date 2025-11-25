@@ -9,7 +9,7 @@ interface ChatInputAreaProps {
   value: string
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onMicClick?: () => void
-  onSend: () => void
+  onSend: (value: string) => void
   isSending?: boolean
   disabled?: boolean
 }

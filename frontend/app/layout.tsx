@@ -10,8 +10,21 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ja">
-      <body>
+    <html
+      lang="ja"
+      style={{
+        height: '100%',
+        overflow: 'hidden', 
+      }}
+    >
+      <body
+        style={{
+          margin: 0,
+          height: '100%',
+          overflow: 'hidden', 
+          backgroundColor: '#020617',
+        }}
+      >
         <ThemeProvider theme={theme}>
           <GlobalStyles />
           {children}
