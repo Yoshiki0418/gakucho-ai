@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Image from 'next/image'
 
 type AvatarPanelProps = {
   frameSrc: string | null
@@ -40,14 +41,13 @@ export const AvatarPanel: React.FC<AvatarPanelProps> = ({
           alignItems: 'flex-end',
         }}
       >
-        <img
+        <Image
           src={currentSrc}
           alt="学長アバター"
+          fill
+          priority
           style={{
-            width: '100%',
-            height: '100%',
             objectFit: 'contain',
-            display: 'block',
           }}
         />
       </div>

@@ -23,9 +23,8 @@ type SSEFrame = {
   fps?: number
 }
 type SSEDone = { type: 'done'; message?: string }
-type SSEAny = (SSEText | SSEAudio | SSEFrame | SSEDone) & {
-  [key: string]: any
-}
+// ★ any 付きの index signature は削除
+type SSEAny = SSEText | SSEAudio | SSEFrame | SSEDone
 
 export function useTextChat(endpoint: string) {
   const [messages, setMessages] = useState<Message[]>([])
@@ -272,7 +271,6 @@ export function useTextChat(endpoint: string) {
       window.removeEventListener('keydown', onUserInteract)
       window.removeEventListener('touchstart', onUserInteract)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return {
