@@ -8,14 +8,28 @@ interface Message {
   role: 'user' | 'assistant'
 }
 
+// ===== SSE ペイロード型 =====
 type SSEText = { type: 'text_chunk'; content: string }
-type SSEAudio = { type: 'audio_chunk'; audio: string; sentence?: string; mime?: string }
-type SSEDone = { type: 'done' }
-type SSEAny = SSEText | SSEAudio | SSEDone
+type SSEAudio = {
+  type: 'audio_chunk'
+  audio: string
+  sentence?: string
+  mime?: string
+}
+type SSEFrame = {
+  type: 'frame_chunk'
+  image: string
+  frame_index?: number
+  fps?: number
+}
+type SSEDone = { type: 'done'; message?: string }
+// ★ any 付きの index signature は削除
+type SSEAny = SSEText | SSEAudio | SSEFrame | SSEDone
 
 export function useTextChat(endpoint: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
+  const [avatarFrameSrc, setAvatarFrameSrc] = useState<string | null>(null) // ★ 最新フレーム
 
   const eventSourceRef = useRef<EventSource | null>(null)
   const currentAssistantIdRef = useRef<string | null>(null)
@@ -30,6 +44,7 @@ export function useTextChat(endpoint: string) {
     stopAllAudio()
     setMessages([])
     setSpeakingMessageId(null)
+    setAvatarFrameSrc(null)
     currentAssistantIdRef.current = null
   }
 
@@ -38,20 +53,20 @@ export function useTextChat(endpoint: string) {
       const AudioContextClass =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
+          .webkitAudioContext
 
       if (!AudioContextClass) {
-        console.error("AudioContext not supported");
-        return;
+        console.error('AudioContext not supported')
+        return
       }
 
-      audioCtxRef.current = new AudioContextClass();
+      audioCtxRef.current = new AudioContextClass()
     }
 
-    if (audioCtxRef.current.state === "suspended") {
-      audioCtxRef.current.resume().catch(() => {});
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {})
     }
-  };
+  }
 
   const b64ToArrayBuffer = (b64: string): ArrayBuffer => {
     b64 = b64.replace(/[\r\n\s]/g, '')
@@ -132,17 +147,26 @@ export function useTextChat(endpoint: string) {
 
   // ==========================================
   const startChat = (userText: string) => {
+    // 新しい会話のたびにオーディオはリセット
     stopAllAudio()
 
-    // 🗣️ ユーザー入力
+    // ユーザーメッセージ追加
     setMessages((prev) => [
       ...prev,
       { id: crypto.randomUUID(), text: userText, role: 'user' },
     ])
 
+    // 既存 SSE を閉じる
     eventSourceRef.current?.close()
 
-    const fullUrl = `http://localhost:8000${endpoint}?text=${encodeURIComponent(userText)}`
+    // ★ FastAPI 直叩き用のベースURL
+    const apiBase =
+      process.env.NEXT_PUBLIC_API_BASE_URL ??
+      'http://localhost:8000' // dev デフォルト
+    const fullUrl = `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}`
+
+    console.log('[useTextChat] SSE connect to:', fullUrl)
+
     const es = new EventSource(fullUrl)
     eventSourceRef.current = es
 
@@ -160,13 +184,13 @@ export function useTextChat(endpoint: string) {
           setMessages((prev) => {
             const last = prev.at(-1)
             if (!last || last.role !== 'assistant') {
-              // 🎯 新しいassistantメッセージを開始
+              // 🎯 新しい assistant メッセージ開始
               const id = crypto.randomUUID()
               currentAssistantIdRef.current = id
               setSpeakingMessageId(id)
               return [...prev, { id, text: chunk, role: 'assistant' }]
             } else {
-              // 同じassistantメッセージにテキストを追加
+              // 直近の assistant メッセージに追記
               const id = currentAssistantIdRef.current ?? last.id
               currentAssistantIdRef.current = id
               setSpeakingMessageId(id)
@@ -177,15 +201,26 @@ export function useTextChat(endpoint: string) {
               return [...prev.slice(0, -1), { ...last, text: updated, id }]
             }
           })
+          return
         }
 
-        // 音声チャンク
-        else if (data.type === 'audio_chunk') {
+        // 🟦 音声チャンク
+        if (data.type === 'audio_chunk') {
           if (data.audio) handleAudioChunk(data.audio)
+          return
         }
 
-        // 完了イベント
-        else if (data.type === 'done') {
+        // 🟦 フレームチャンク（Ditto）
+        if (data.type === 'frame_chunk') {
+          const imgBase64: string | undefined = data.image
+          if (imgBase64) {
+            setAvatarFrameSrc(`data:image/jpeg;base64,${imgBase64}`)
+          }
+          return
+        }
+
+        // 🟦 完了イベント
+        if (data.type === 'done') {
           setMessages((prev) => {
             const last = prev.at(-1)
             if (last && last.role === 'assistant') {
@@ -197,7 +232,11 @@ export function useTextChat(endpoint: string) {
             return prev
           })
           es.close()
+          eventSourceRef.current = null
+          return
         }
+
+        // その他の type（'start' など）は一旦無視でもOK
       } catch (e) {
         console.error('Parse error:', e)
       }
@@ -206,6 +245,7 @@ export function useTextChat(endpoint: string) {
     es.onerror = (err) => {
       console.error('❌ SSE Error:', err)
       es.close()
+      eventSourceRef.current = null
       setSpeakingMessageId(null)
       currentAssistantIdRef.current = null
     }
@@ -223,6 +263,7 @@ export function useTextChat(endpoint: string) {
     window.addEventListener('click', onUserInteract)
     window.addEventListener('keydown', onUserInteract)
     window.addEventListener('touchstart', onUserInteract)
+
     return () => {
       eventSourceRef.current?.close()
       stopAllAudio()
@@ -237,5 +278,6 @@ export function useTextChat(endpoint: string) {
     startChat,
     speakingMessageId,
     resetChat,
+    avatarFrameSrc, // AvatarPanel に渡す用
   }
 }

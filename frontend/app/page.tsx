@@ -3,12 +3,13 @@
 import React, { useState } from 'react'
 import ChatPanel from '@/components/organisms/ChatPanel'
 import { useTextChat } from '@/features/text-chat/hooks/useTextChat'
+import { AvatarPanel } from '@/components/organisms/AvatarPanel'
 
 export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
 
-  const { messages, startChat, speakingMessageId, resetChat } =
+  const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc} =
   useTextChat('/api/text-chat/char-stream-agent')
 
   const handleMicClick = () => {
@@ -65,6 +66,7 @@ export default function ChatDemoPage() {
           onResetChat={resetChat} 
           speakingMessageId={speakingMessageId}
         />
+        <AvatarPanel frameSrc={avatarFrameSrc} />
       </section>
     </main>
   )
