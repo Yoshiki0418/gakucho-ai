@@ -22,3 +22,11 @@ psycopg2-binary
 sentencepiece
 python-multipart
 openai-agents
+imageio
+opencv-python
+scikit-image
+cython
+librosa
+onnxruntime
+mediapipe
+einops
