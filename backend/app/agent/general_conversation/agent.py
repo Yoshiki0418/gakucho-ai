@@ -138,4 +138,9 @@ class GeneralConversationAgent:
         async for event in stream_result.stream_events():
             # raw_response_event としてテキストデルタがある場合
             if event.type == "raw_response_event" and hasattr(event.data, "delta"):
+                delta = event.data.delta
+
+                if delta.strip() in ("", "{}", "[]"):
+                    continue
+
                 yield event.data.delta
