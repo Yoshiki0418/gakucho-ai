@@ -8,6 +8,7 @@ from typing import Dict
 import cv2
 import numpy as np
 import soundfile as sf
+from app.agent.agent_factory import build_conversation_orchestrator
 from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.agent.general_conversation.domains import (
     LifePlanningAgent,
@@ -430,5 +431,88 @@ async def char_stream_agent_avatar(request: Request):
 
         # 最後に完了イベント
         yield sse_event("done", {"message": "応答完了"})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+conversation_orchestrator = build_conversation_orchestrator()
+
+
+@router.get("/char-stream-orchestrator")
+async def char_stream_orchestrator(request: Request):
+    user_input = request.query_params.get("text", "こんにちは！")
+
+    # モデル選択
+    tts_provider = request.query_params.get("tts_provider", None)
+    tts_voice = request.query_params.get("tts_voice", None)
+
+    if tts_voice:
+        from app.models.model_registry import create_tts
+
+        _tts = create_tts(tts_provider or "style-bert-vits2")
+    else:
+        _tts = tts
+
+    PUNCTUATIONS = {"。", "！", "？", "!", "?"}
+
+    async def event_stream():
+        sentence_buffer = ""
+
+        async for chunk in conversation_orchestrator.stream_response(
+            user_id="1",
+            text=user_input,
+        ):
+            text_piece = str(chunk)
+            sentence_buffer += text_piece
+
+            yield (
+                "data: "
+                + json.dumps({"type": "text_chunk", "content": text_piece})
+                + "\n\n"
+            )
+
+            # 文の終端を検出したら、その文をTTSに渡す
+            if any(p in text_piece for p in PUNCTUATIONS):
+                current_sentence = sentence_buffer.strip()
+
+                # 並列で音声生成
+                audio_b64 = await asyncio.to_thread(
+                    _tts.synthesize_to_base64,
+                    current_sentence,
+                )
+
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "type": "audio_chunk",
+                            "sentence": current_sentence,
+                            "audio": audio_b64,
+                        }
+                    )
+                    + "\n\n"
+                )
+
+                sentence_buffer = ""
+
+        # 最後に残った文を処理
+        if sentence_buffer.strip():
+            audio_b64 = await asyncio.to_thread(
+                _tts.synthesize_to_base64,
+                sentence_buffer.strip(),
+            )
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "type": "audio_chunk",
+                        "sentence": sentence_buffer.strip(),
+                        "audio": audio_b64,
+                    }
+                )
+                + "\n\n"
+            )
+
+        yield ("data: " + json.dumps({"type": "done", "message": "応答完了"}) + "\n\n")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
