@@ -58,16 +58,22 @@ class OpenAILLM(BaseLLM):
 
         messages = self.build_context(message, self._system_prompt, history)
 
-        print(messages)
-
-        response = openai_client.chat.completions.create(
-            model=self._model_name,
-            messages=messages,
-            tools=tool_calls,
-            tool_choice="auto",
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        if tool_calls:
+            response = openai_client.chat.completions.create(
+                model=self._model_name,
+                messages=messages,
+                tools=tool_calls,
+                tool_choice="auto",
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+        else:
+            response = openai_client.chat.completions.create(
+                model=self._model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
 
         return response.choices[0].message.content.strip()
 
