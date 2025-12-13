@@ -4,6 +4,7 @@ import pandas as pd
 import psycopg2
 import torch
 import torch.nn.functional as F
+from psycopg2 import Error as PsycopgError
 from sentence_transformers import SentenceTransformer
 
 
@@ -18,40 +19,100 @@ class RAGStore:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ==========================================================
-    # 挿入処理
+    # 内部ユーティリティ: CSV の自動エンコーディング読み込み
     # ==========================================================
+    def _read_csv_auto_encoding(self, csv_path: str) -> pd.DataFrame:
+        """
+        CSV を複数のエンコーディングで試し読みし、
+        うまくいったものを返す。ダメなら chardet で推定。
+        """
+        tried_encodings: list[str] = []
+
+        # よく使う日本語系 + UTF 系を優先して試す
+        candidate_encodings = [
+            "utf-8",
+            "utf-8-sig",
+            "cp932",  # Windows 日本語
+            "shift_jis",
+            "euc-jp",
+        ]
+
+        for enc in candidate_encodings:
+            try:
+                df = pd.read_csv(csv_path, dtype=str, encoding=enc)
+                print(f"📄 CSV encoding detected as '{enc}' (trial)")
+                return df
+            except UnicodeDecodeError:
+                tried_encodings.append(enc)
+                continue
+
+        try:
+            import chardet
+
+            with open(csv_path, "rb") as f:
+                raw = f.read(200_000)  # 最初の 200KB だけを見る
+            detected = chardet.detect(raw)
+            enc = detected.get("encoding")
+            if enc:
+                try:
+                    df = pd.read_csv(csv_path, dtype=str, encoding=enc)
+                    print(f"📄 CSV encoding auto-detected by chardet as '{enc}'")
+                    return df
+                except UnicodeDecodeError:
+                    tried_encodings.append(enc)
+        except ImportError:
+            pass
+
+        # ここまで来たら全部失敗
+        raise UnicodeDecodeError(
+            "csv",
+            b"",
+            0,
+            0,
+            f"CSV の読み込みに失敗しました。試した encoding: {tried_encodings}。",
+        )
+
     def insert_from_csv(self, csv_path: str, source_name: str | None = None):
         """CSVを読み込み、context列をembeddingしてDBに格納（重複は更新 or スキップ）"""
         inserted = 0
         updated = 0
         skipped = 0
+        skipped_index_limit = 0  # index row too large で飛ばした件数
 
-        df = pd.read_csv(csv_path, dtype=str).fillna("")
+        df = self._read_csv_auto_encoding(csv_path).fillna("")
+
+        if "context" not in df.columns:
+            raise ValueError(
+                f"'context' 列が CSV '{csv_path}' に存在しません。列名を確認してください。"
+            )
+
         contexts = df["context"].tolist()
 
         docs = [f"検索文書: {c}" for c in contexts]
         embeddings = self.model.encode(docs, convert_to_tensor=True, device=self.device)
         embeddings = F.normalize(embeddings, p=2, dim=1)
 
-        inserted, updated, skipped = 0, 0, 0
-        with self.conn, self.conn.cursor() as cur:
+        # ★ autocommit=True 前提なので connection の with はやめる
+        with self.conn.cursor() as cur:
             for context, emb in zip(contexts, embeddings):
                 emb_list = emb.cpu().tolist()
                 source = source_name or os.path.basename(csv_path)
 
-                # --- まずINSERT試行 ---
-                cur.execute(
-                    """
-                    INSERT INTO ohsawa_context (context, embedding, source, created_at, updated_at)
-                    VALUES (%s, %s, %s, NOW(), NOW())
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (context, emb_list, source),
-                )
+                try:
+                    # --- まずINSERT試行 ---
+                    cur.execute(
+                        """
+                        INSERT INTO ohsawa_context (context, embedding, source, created_at, updated_at)
+                        VALUES (%s, %s, %s, NOW(), NOW())
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (context, emb_list, source),
+                    )
 
-                if cur.rowcount > 0:
-                    inserted += 1
-                else:
+                    if cur.rowcount > 0:
+                        inserted += 1
+                        continue  # 次のレコードへ
+
                     # --- 重複していた場合は手動でUPDATE ---
                     cur.execute(
                         """
@@ -61,49 +122,50 @@ class RAGStore:
                         """,
                         (emb_list, context, source),
                     )
+
                     if cur.rowcount > 0:
                         updated += 1
                     else:
+                        # ここは「重複していたが内容は同じで何も変わらなかった」など
                         skipped += 1
+
+                except PsycopgError as e:
+                    msg = str(e)
+                    pgcode = getattr(e, "pgcode", None)
+
+                    # index row requires XXXX bytes, maximum size is 8191
+                    if "maximum size is 8191" in msg or pgcode == "54000":
+                        skipped += 1
+                        skipped_index_limit += 1
+
+                        # autocommit=True なので rollback は不要＆しない
+                        preview = context.replace("\n", " ")[:120]
+                        print(
+                            "⚠️ Skipped row due to index row size limit "
+                            f"(len(context)={len(context)}): {preview!r}"
+                        )
+                        continue
+
+                    # それ以外のDBエラーはそのまま上に投げる
+                    raise
 
         print(f"✅ Upserted {inserted} records from {csv_path}")
         if updated > 0:
             print(f"🔄 Updated {updated} existing records.")
         if skipped > 0:
-            print(f"⚠️ Skipped {skipped} records (no changes).")
+            print(f"⚠️ Skipped {skipped} records (no changes or errors).")
+        if skipped_index_limit > 0:
+            print(
+                f"🧱 Skipped {skipped_index_limit} records due to "
+                "PostgreSQL index row size limit (8191 bytes)."
+            )
 
         return {
             "inserted": inserted,
             "updated": updated,
             "skipped": skipped,
+            "skipped_index_limit": skipped_index_limit,
         }
-
-    # ==========================================================
-    # 検索処理
-    # ==========================================================
-    def search(self, query: str, top_k: int = 5):
-        """PostgreSQL内でコサイン類似度検索"""
-        query_text = f"検索クエリ: {query}"
-        query_emb = self.model.encode(
-            [query_text], convert_to_tensor=True, device=self.device
-        )
-        query_emb = F.normalize(query_emb, p=2, dim=1).cpu().tolist()[0]
-
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, context, 1 - (embedding <=> %s::vector) AS similarity
-                FROM ohsawa_context
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s
-                """,
-                (query_emb, query_emb, top_k),
-            )
-            results = cur.fetchall()
-
-        return [
-            {"id": r[0], "context": r[1], "similarity": float(r[2])} for r in results
-        ]
 
     # ==========================================================
     # ベクター検索処理
