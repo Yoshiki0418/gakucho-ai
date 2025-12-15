@@ -10,6 +10,39 @@ type VoiceInputAreaProps = {
   isAISpeaking?: boolean
 }
 
+/**
+ * ✅ DOM の lib に SpeechRecognition 系の型が無い環境でもビルドできるように、
+ *   必要最小限の型だけ自前定義する
+ */
+type SpeechRecognitionAlternative = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: ((event: any) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+type SpeechRecognitionResultItemLike = {
+  transcript: string
+}
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean
+  length: number
+  [index: number]: SpeechRecognitionResultItemLike
+}
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: {
+    length: number
+    [index: number]: SpeechRecognitionResultLike
+  }
+}
+
 export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   onTranscript,
   disabled = false,
@@ -19,7 +52,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   const [audioLevel, setAudioLevel] = useState(0)
   const [previewText, setPreviewText] = useState('')
 
-  const recognitionRef = useRef<any>(null)
+  const recognitionRef = useRef<SpeechRecognitionAlternative | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
@@ -29,47 +62,49 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const SpeechRecognition =
+    const SpeechRecognitionCtor =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
 
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionCtor) {
       console.warn('SpeechRecognition API が利用できません')
       return
     }
 
-    const recognition = new SpeechRecognition()
+    const recognition: SpeechRecognitionAlternative = new SpeechRecognitionCtor()
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'ja-JP'
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let interim = ''
-      let final = ''
+      let finalText = ''
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          final += t
+        const result = event.results[i]
+        const t = result[0]?.transcript ?? ''
+        if (result.isFinal) {
+          finalText += t
         } else {
           interim += t
         }
       }
 
-      setPreviewText(interim || final)
+      setPreviewText(interim || finalText)
 
-      if (final) {
+      if (finalText) {
         skipAutoRestartRef.current = true
-        onTranscript(final)
+        onTranscript(finalText)
         setPreviewText('')
       }
     }
 
     recognition.onerror = (e: any) => {
-      console.error('SpeechRecognition error:', e.error)
+      console.error('SpeechRecognition error:', e?.error ?? e)
       setIsListening(false)
     }
 
     recognition.onend = () => {
+      // stopListening() 直後の onend で再スタートしないためのガード
       if (isListening && !skipAutoRestartRef.current) {
         recognition.start()
       }
@@ -92,7 +127,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const AudioCtx =
         (window as any).AudioContext || (window as any).webkitAudioContext
-      const audioCtx = new AudioCtx()
+      const audioCtx: AudioContext = new AudioCtx()
       const analyser = audioCtx.createAnalyser()
       const source = audioCtx.createMediaStreamSource(stream)
       source.connect(analyser)
@@ -223,9 +258,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
             {isAISpeaking ? (
               <>
                 <Volume2 size={16} />
-                <span style={{ color: '#FFFFFF' }}>
-                  学長AIが話しています...
-                </span>
+                <span style={{ color: '#FFFFFF' }}>学長AIが話しています...</span>
               </>
             ) : isListening ? (
               <>
@@ -237,9 +270,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
                     backgroundColor: '#EF4444',
                   }}
                 />
-                <span style={{ color: '#FFFFFF' }}>
-                  録音中...
-                </span>
+                <span style={{ color: '#FFFFFF' }}>録音中...</span>
               </>
             ) : (
               <>
@@ -271,7 +302,6 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
             {isListening ? (
               renderWaveBars()
             ) : (
-              // 待機時は小さなドットを並べる
               <div
                 style={{
                   display: 'flex',
@@ -337,7 +367,11 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
             flexShrink: 0,
           }}
         >
-          {isListening ? <Square size={22} color="#ffffff" /> : <Mic size={26} color="#ffffff" />}
+          {isListening ? (
+            <Square size={22} color="#ffffff" />
+          ) : (
+            <Mic size={26} color="#ffffff" />
+          )}
         </motion.button>
       </div>
     </div>
