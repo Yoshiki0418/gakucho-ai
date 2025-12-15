@@ -34,7 +34,7 @@ origins = [
     "http://localhost:4001",
     "http://127.0.0.1:4001",
     "http://192.168.29.16:4001",
-    "https://gakucho-fvczn2es3-yoshiki0418s-projects.vercel.app"
+    "https://gakucho-fvczn2es3-yoshiki0418s-projects.vercel.app",
     #     "https://gakucho-ai.vercel.app",  # 本番フロント想定
 ]
 
