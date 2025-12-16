@@ -162,7 +162,7 @@ export function useTextChat(endpoint: string) {
     // ★ FastAPI 直叩き用のベースURL
     const apiBase =
       process.env.NEXT_PUBLIC_API_BASE_URL ??
-      'http://localhost:8000' // dev デフォルト
+      'http://192.168.29.16:8077' // dev デフォルト
     const fullUrl = `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}`
 
     console.log('[useTextChat] SSE connect to:', fullUrl)
