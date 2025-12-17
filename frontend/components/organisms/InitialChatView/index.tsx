@@ -10,8 +10,9 @@ import {
   BookOpen,
   School,
   MessageCircle,
-  Camera,
+  TrendingUp,
   Sparkles,
+  Mic,
 } from 'lucide-react'
 
 type Template = {
@@ -25,19 +26,19 @@ const TEMPLATES: Template[] = [
   {
     id: 'news',
     icon: Lightbulb,
-    title: '最近のKITのニュース教えて',
+    title: '最近のKITのニュース教えて！',
     description: '金沢工業大学の最新情報やイベントについて',
   },
   {
     id: 'research',
     icon: GraduationCap,
-    title: '研究テーマについて相談したいです',
+    title: '研究テーマについて相談したいです。',
     description: 'あなたの興味に合った研究分野を一緒に考えます',
   },
   {
     id: 'exam',
     icon: BookOpen,
-    title: '推薦入試の対策を教えて',
+    title: '推薦入試の対策を教えて！',
     description: '入試に関する情報とアドバイスを提供します',
   },
   {
@@ -53,11 +54,17 @@ const TEMPLATES: Template[] = [
     description: '学長AIができることをご紹介します',
   },
   {
-    id: 'camera',
-    icon: Camera,
-    title: 'カメラの映像を解析してみて',
-    description: '視覚的な情報を用いた対話をサポートします',
+    id: 'torend',
+    icon: TrendingUp,
+    title: '最近のAI技術のトレンドを教えて！',
+    description: '最新のトレンドを調査します。',
   },
+  {
+    id: 'speech',
+    icon: Mic,
+    title: '教職員向けに金沢工業大学の建学の綱領をもとに元に年末の忘年会の挨拶を話してください。',
+    description: '忘年会の挨拶を担当します。',
+  }
 ]
 
 interface InitialChatViewProps {
