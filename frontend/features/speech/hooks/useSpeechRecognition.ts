@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 
 interface UseSpeechRecognitionOptions {
   lang?: string
@@ -10,10 +10,6 @@ interface UseSpeechRecognitionOptions {
   onError?: (error: string) => void
 }
 
-/**
- * ✅ SpeechRecognition 系は TS の lib.dom に存在しない環境があるため、
- *   必要最小限の型だけローカルで定義する（Next build を確実に通す）
- */
 type SpeechRecognitionResultItemLike = {
   transcript: string
 }
@@ -44,6 +40,7 @@ type SpeechRecognitionLike = {
   onend: (() => void) | null
   start: () => void
   stop: () => void
+  abort?: () => void
 }
 
 export function useSpeechRecognition({
@@ -55,10 +52,6 @@ export function useSpeechRecognition({
 }: UseSpeechRecognitionOptions = {}) {
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
-
-  const lastResultIndexRef = useRef(-1)
-  const finalTextRef = useRef('')
-  const lastFinalSegmentRef = useRef('')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -77,39 +70,33 @@ export function useSpeechRecognition({
     recognition.continuous = continuous
 
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
-      let interim = ''
-      let newFinal = ''
+      let finalTranscript = ''
+      let interimTranscript = ''
 
+      // 毎回すべての結果を走査して文字列を再構築する
       for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i]
-        if (result.isFinal && i <= lastResultIndexRef.current) continue
-
         const transcript = result[0]?.transcript ?? ''
 
         if (result.isFinal) {
-          newFinal += transcript
-          lastResultIndexRef.current = i
+          finalTranscript += transcript
         } else {
-          interim += transcript
+          interimTranscript += transcript
         }
       }
 
-      if (newFinal) {
-        // 差分のみ抽出
-        const diff = newFinal.replace(lastFinalSegmentRef.current, '').trim()
-        if (diff) {
-          lastFinalSegmentRef.current = newFinal
-          finalTextRef.current += diff + ' '
-          onResult?.(diff, true)
-        }
-      } else if (interim) {
-        onResult?.(finalTextRef.current + interim, false)
+      // 結果を通知
+      if (finalTranscript || interimTranscript) {
+        onResult?.(finalTranscript + interimTranscript, false)
       }
     }
+    // ---------------------------------------------------
 
     recognition.onerror = (e: SpeechRecognitionErrorEventLike) => {
-      onError?.(e?.error ?? 'SpeechRecognition error')
-      setIsListening(false)
+      const errorMsg = e?.error ?? 'SpeechRecognition error'
+      if (errorMsg !== 'no-speech') {
+        onError?.(errorMsg)
+      }
     }
 
     recognition.onend = () => {
@@ -118,37 +105,61 @@ export function useSpeechRecognition({
 
     recognitionRef.current = recognition
 
+    // クリーンアップ関数
     return () => {
-      recognition.stop()
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch (e) {
+        }
+      }
       recognitionRef.current = null
     }
-    // onError / onResult は外から変わる可能性があるが、初期化を毎回やり直すのは避ける想定
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, interimResults, continuous])
+  }, [lang, interimResults, continuous, onResult, onError])
 
-  const start = () => {
-    if (!recognitionRef.current) return
-    finalTextRef.current = ''
-    lastResultIndexRef.current = -1
-    lastFinalSegmentRef.current = ''
-    recognitionRef.current.start()
-    setIsListening(true)
-  }
+  // --- 操作メソッドの安定化 (useCallback) ---
 
-  const stop = () => {
-    recognitionRef.current?.stop()
-    setIsListening(false)
-  }
+  const start = useCallback(() => {
+    if (recognitionRef.current && !isListening) {
+      try {
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch (e) {
+        console.error('Failed to start recognition:', e)
+      }
+    }
+  }, [isListening])
 
-  const reset = () => {
-    finalTextRef.current = ''
-    lastResultIndexRef.current = -1
-    lastFinalSegmentRef.current = ''
-  }
+  const stop = useCallback(() => {
+    if (recognitionRef.current && isListening) {
+      try {
+        recognitionRef.current.stop()
+        setIsListening(false)
+      } catch (e) {
+        console.error('Failed to stop recognition:', e)
+      }
+    }
+  }, [isListening])
 
-  const syncExternalText = (text: string) => {
-    finalTextRef.current = text
-  }
+  const reset = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        // abortがあればabort、なければstopでリセットを試みる
+        if (recognitionRef.current.abort) {
+          recognitionRef.current.abort()
+        } else {
+          recognitionRef.current.stop()
+        }
+      } catch (e) {
+        console.error('Failed to reset recognition:', e)
+      }
+      setIsListening(false)
+    }
+  }, [])
+
+  const syncExternalText = useCallback((text: string) => {
+    // Do nothing
+  }, [])
 
   return { isListening, start, stop, reset, syncExternalText }
 }
