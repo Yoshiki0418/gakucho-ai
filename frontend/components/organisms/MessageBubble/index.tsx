@@ -3,6 +3,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
+import type { Components } from 'react-markdown'
 import Flex from '@/components/styles/Flex'
 import Icon from '@/components/atoms/Icon'
 import { NameLabel } from '@/components/atoms/NameLabel'
@@ -52,6 +53,94 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           ? '0 0 24px rgba(59,130,246,0.6)'
           : '0 4px 16px rgba(0,0,0,0.2)',
       }
+
+  // ✅ inline を使わない：className が language-xxx ならブロック扱い
+  const markdownComponents: Components = {
+    p: ({ children }) => (
+      <p
+        style={{
+          color: '#E5E7EB',
+          fontSize: 15,
+          lineHeight: 1.6,
+          margin: '0 0 8px',
+        }}
+      >
+        {children}
+      </p>
+    ),
+
+    pre: ({ children, ...props }) => (
+      <pre
+        {...props}
+        style={{
+          background: 'rgba(0,0,0,0.45)',
+          padding: '14px 16px',
+          borderRadius: 12,
+          margin: '8px 0',
+          overflowX: 'auto',
+          border: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        {children}
+      </pre>
+    ),
+
+    code: ({ children, className, ...props }) => {
+      const isBlock =
+        typeof className === 'string' && /language-\w+/i.test(className)
+
+      // ブロックコード（```）: <pre> 側で枠を作るので <code> は素の見た目にする
+      if (isBlock) {
+        return (
+          <code
+            className={className}
+            {...props}
+            style={{
+              fontFamily: 'Menlo, Consolas, monospace',
+              fontSize: 14,
+              color: '#F3F4F6',
+              whiteSpace: 'pre',
+              display: 'block',
+            }}
+          >
+            {children}
+          </code>
+        )
+      }
+
+      // インラインコード（`text`）
+      return (
+        <code
+          className={className}
+          {...props}
+          style={{
+            background: 'rgba(255,255,255,0.1)',
+            padding: '2px 4px',
+            borderRadius: 4,
+            fontSize: 14,
+            color: '#F9FAFB',
+            fontFamily: 'Menlo, Consolas, monospace',
+          }}
+        >
+          {children}
+        </code>
+      )
+    },
+
+    a: ({ children, ...props }) => (
+      <a
+        {...props}
+        style={{
+          color: '#60A5FA',
+          textDecoration: 'underline',
+        }}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+      </a>
+    ),
+  }
 
   return (
     <motion.div
@@ -113,74 +202,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               </p>
             ) : (
               <div className="gakucho-markdown">
-                <ReactMarkdown
-                  components={{
-                    p: ({ children }) => (
-                      <p
-                        style={{
-                          color: '#E5E7EB',
-                          fontSize: 15,
-                          lineHeight: 1.6,
-                          margin: '0 0 8px',
-                        }}
-                      >
-                        {children}
-                      </p>
-                    ),
-
-                    code: ({ inline, children }) =>
-                      inline ? (
-                        // インラインコード（`text`）
-                        <code
-                          style={{
-                            background: 'rgba(255,255,255,0.1)',
-                            padding: '2px 4px',
-                            borderRadius: 4,
-                            fontSize: 14,
-                            color: '#F9FAFB',
-                          }}
-                        >
-                          {children}
-                        </code>
-                      ) : (
-                        <pre
-                          style={{
-                            background: 'rgba(0,0,0,0.45)',
-                            padding: '14px 16px',
-                            borderRadius: 12,
-                            margin: '8px 0',
-                            overflowX: 'auto',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                          }}
-                        >
-                          <code
-                            style={{
-                              fontFamily: 'Menlo, Consolas, monospace',
-                              fontSize: 14,
-                              color: '#F3F4F6',
-                              whiteSpace: 'pre-wrap',
-                            }}
-                          >
-                            {children}
-                          </code>
-                        </pre>
-                      ),
-
-                    a: ({ children, ...props }) => (
-                      <a
-                        {...props}
-                        style={{
-                          color: '#60A5FA',
-                          textDecoration: 'underline',
-                        }}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {children}
-                      </a>
-                    ),
-                  }}
-                >
+                <ReactMarkdown components={markdownComponents}>
                   {message.text}
                 </ReactMarkdown>
               </div>

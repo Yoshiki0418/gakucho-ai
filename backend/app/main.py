@@ -34,7 +34,8 @@ origins = [
     "http://localhost:4001",
     "http://127.0.0.1:4001",
     "http://192.168.29.16:4001",
-    #     "https://gakucho-ai.vercel.app",  # 本番フロント想定
+    "http://192.168.29.16:30212",
+    "https://192.168.29.16",
 ]
 
 app.add_middleware(
@@ -69,4 +70,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8076, reload=True)

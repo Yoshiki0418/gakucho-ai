@@ -8,22 +8,13 @@ services:
       args:
         HF_USERNAME: ${HF_USERNAME}
         HF_TOKEN: ${HF_TOKEN}
+    network_mode: "host"
     gpus: all
     volumes:
       - ..:/workspace:cached
-    ports:
-      - "8077:8000"
     command: sleep infinity
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    networks:
-      - default
-      - shared_db 
-
-networks:
-  default:
-    driver: bridge
-  shared_db:
-    external: true
-    name: gakucho-ai_db_network
+      - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
+      - PORT=8076
