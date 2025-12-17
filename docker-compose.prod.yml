@@ -52,6 +52,7 @@ services:
       - PYTHONPATH=/workspace
       - LLM_SYSTEM_PROMPT_PATH=/workspace/app/prompts/system_prompt.txt
       - TTS_MODEL_DIR=/workspace/app/weights/tts/gakucho_ai_v2
+      - TZ=Asia/Tokyo
     depends_on:
       db:
         condition: service_healthy
@@ -67,14 +68,14 @@ services:
       context: frontend
       dockerfile: Dockerfile.prod
       args:
-        NEXT_PUBLIC_API_BASE_URL: https://192.168.29.16
+        NEXT_PUBLIC_API_BASE_URL: https://192.168.29.16:30929
     network_mode: "host"
     image: gakucho-ai-frontend:prod
     environment:
       - NODE_ENV=production
       - PORT=30212 
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_API_BASE_URL=https://192.168.29.16
+      - NEXT_PUBLIC_API_BASE_URL=https://192.168.29.16:30929
     depends_on:
       - backend
     restart: unless-stopped

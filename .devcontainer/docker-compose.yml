@@ -18,3 +18,4 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
       - PORT=8076
+      - TZ=Asia/Tokyo

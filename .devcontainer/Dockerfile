@@ -2,9 +2,13 @@
 FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
 USER root
+ENV TZ=Asia/Tokyo
 
 # 必要なパッケージをインストール
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    tzdata \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+    && apt-get install -y \
     python3.10 \
     python3-pip \
     git \
