@@ -264,5 +264,10 @@ class ResponseOrchestrator:
             async for chunk in self.handle_rag(user_id, text):
                 yield chunk
         else:
-            async for chunk in self.handle_daily_with_filler(user_id, text):
+            # async for chunk in self.handle_daily_with_filler(user_id, text):
+            #     yield chunk
+            async for chunk in self.daily_agent.stream_generate(
+                user_id=user_id,
+                message=text,
+            ):
                 yield chunk

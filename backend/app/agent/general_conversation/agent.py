@@ -3,6 +3,7 @@ from typing import AsyncIterator
 
 from agents import Agent, Runner
 from app.agent.general_conversation.domains import (
+    EventGreetingAgent,
     LifePlanningAgent,
     LocationAgent,
     PresidentAgent,
@@ -35,6 +36,7 @@ class GeneralConversationAgent:
         # reasoning_agent: ReasoningAgent,
         location_agent: LocationAgent,
         president_agent: PresidentAgent,
+        event_greeting_agent: EventGreetingAgent,
     ):
         self.agent = Agent(
             name="GeneralConversationAgent",
@@ -108,7 +110,17 @@ class GeneralConversationAgent:
             ---
 
             # =========================================================
-            # [E] PresidentAgent へ handoff すべきケース
+            # [E] EventGreetingAgent へ handoff すべきケース
+            # =========================================================
+            以下に該当する場合は、必ず EventGreetingAgent に handoff してください。
+
+            ■ 大学教職員向けの忘年会での挨拶文作成依頼
+            ■ 挨拶文のトーンや構成に関する相談
+            ■ その他、イベント挨拶に特化した内容の依頼
+            ---
+
+            # =========================================================
+            # [F] PresidentAgent へ handoff すべきケース
             # =========================================================
             以下に該当する場合は、必ず PresidentAgent に handoff してください。
 
@@ -126,7 +138,7 @@ class GeneralConversationAgent:
             ---
 
             # =========================================================
-            # [F] ResearchAgent へ handoff すべきケース
+            # [G] ResearchAgent へ handoff すべきケース
             # =========================================================
             ■ ニュース・最新情報・トレンド
             ■ 「調べて」「検索して」「まとめて」などの調査依頼
@@ -136,7 +148,7 @@ class GeneralConversationAgent:
             ---
 
             # =========================================================
-            # [G] LifePlanningAgent へ handoff すべきケース
+            # [H] LifePlanningAgent へ handoff すべきケース
             # =========================================================
             ■ 人生設計・目標設定・キャリア設計
             ■ 学習計画・仕事・お金に関する長期的相談
@@ -146,7 +158,7 @@ class GeneralConversationAgent:
             ---
 
             # =========================================================
-            # [H] handoff 共通ルール
+            # [I] handoff 共通ルール
             # =========================================================
             - handoff は必ず **最も適切な1エージェントのみ**
             - handoff 時は簡潔に、丁寧に委譲する
@@ -156,7 +168,7 @@ class GeneralConversationAgent:
             ---
 
             # =========================================================
-            # [I] 応答スタイル（自分で回答する場合）
+            # [J] 応答スタイル（自分で回答する場合）
             # =========================================================
             - 丁寧で自然な会話口調（学長として）
             - 不要に専門的にならない
@@ -169,6 +181,7 @@ class GeneralConversationAgent:
                 life_planning_agent,
                 location_agent,
                 president_agent,
+                event_greeting_agent,
             ],
         )
         # self.domain_agents: dict[str, Agent] = {
