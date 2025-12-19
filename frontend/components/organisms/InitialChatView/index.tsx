@@ -62,8 +62,14 @@ const TEMPLATES: Template[] = [
   {
     id: 'speech',
     icon: Mic,
-    title: '教職員向けに金沢工業大学の建学の綱領をもとに元に年末の忘年会の挨拶を話してください。',
-    description: '忘年会の挨拶を担当します。',
+    title: '教職員向けに心温まる忘年会の挨拶を話してください。',
+    description: '心温まる忘年会の挨拶を担当します。',
+  },
+  {
+    id: 'speech2',
+    icon: Mic,
+    title: '金沢工業大学の忘年会の挨拶を面白おかしくお願いします。',
+    description: '面白おかしく忘年会の挨拶を担当します。',
   }
 ]
 
