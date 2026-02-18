@@ -5,6 +5,12 @@ from typing import Optional
 
 import numpy as np
 import soundfile as sf
+
+# Monkeypatching: style_bert_vits2.models.infer.get_text
+# 理由: 最新環境で BERT モデルが FP16 (Half) で出力を返すようになり、
+# Linear レイヤー (Float) との型不整合で RuntimeError が発生するため。
+# ここで明示的に float() にキャストするラッパーを差し込む。
+import style_bert_vits2.models.infer as infer_module
 import style_bert_vits2.nlp.bert_models as bert_models
 import torch
 from style_bert_vits2.constants import (
@@ -16,13 +22,10 @@ from style_bert_vits2.constants import (
 )
 from style_bert_vits2.tts_model import TTSModel
 
-# Monkeypatching: style_bert_vits2.models.infer.get_text
-# 理由: 最新環境で BERT モデルが FP16 (Half) で出力を返すようになり、
-# Linear レイヤー (Float) との型不整合で RuntimeError が発生するため。
-# ここで明示的に float() にキャストするラッパーを差し込む。
-import style_bert_vits2.models.infer as infer_module
+from .base_tts import BaseTTS
 
 _original_get_text = infer_module.get_text
+
 
 def _get_text_patched(*args, **kwargs):
     bert, ja_bert, en_bert, phone, tone, language = _original_get_text(*args, **kwargs)
@@ -35,9 +38,8 @@ def _get_text_patched(*args, **kwargs):
         language,
     )
 
-infer_module.get_text = _get_text_patched
 
-from .base_tts import BaseTTS
+infer_module.get_text = _get_text_patched
 
 
 class StyleBertVITS2_TTS(BaseTTS):
