@@ -1,12 +1,12 @@
 import asyncio
 
-# import base64
-# import io
+import base64
+import io
 import json
 
 # import cv2
-# import numpy as np
-# import soundfile as sf
+import numpy as np
+import soundfile as sf
 from app.agent.agent_factory import build_conversation_orchestrator
 from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.agent.general_conversation.domains import (
@@ -301,12 +301,6 @@ async def char_stream_agent(request: Request):
 #     # --- Agent / TTS の準備 ---
 #     tts_provider = request.query_params.get("tts_provider", None)
 #     tts_voice = request.query_params.get("tts_voice", None)
-#     research_agent = ResearchAgent()
-#     life_planning_agent = LifePlanningAgent()
-#     location_agent = LocationAgent()
-#     agent = GeneralConversationAgent(
-#         research_agent.agent, life_planning_agent.agent, location_agent.agent
-#     )
 
 #     if tts_voice:
 #         from app.models.model_registry import create_tts
@@ -316,122 +310,90 @@ async def char_stream_agent(request: Request):
 #         _tts = tts
 
 #     PUNCTUATIONS = {"。", "！", "？", "!", "?"}
+#     FPS = 25  # Dittoのフレームレート
 
 #     async def event_stream():
-#         # すべての SSE イベントをここに集約
-#         event_queue: asyncio.Queue[str] = asyncio.Queue()
+#         sentence_buffer = ""
 
-#         # ---------- Producer 1: テキスト & オーディオ & Ditto への音声 push ----------
-#         async def text_and_audio_producer():
-#             sentence_buffer = ""
+#         async for chunk in conversation_orchestrator.stream_response(user_id="1", text=user_input):
+#             text_piece = str(chunk)
+#             sentence_buffer += text_piece
 
-#             async for chunk in agent.stream_generate(user_id="1", message=user_input):
-#                 text_piece = str(chunk)
-#                 sentence_buffer += text_piece
+#             # テキストチャンクをすぐイベントに
+#             yield sse_event("text_chunk", {"content": text_piece})
 
-#                 # テキストチャンクをすぐイベントに
-#                 await event_queue.put(sse_event("text_chunk", {"content": text_piece}))
+#             # 文末検出 → 1文ぶんを TTS & リップシンク同時処理
+#             if any(p in text_piece for p in PUNCTUATIONS):
+#                 current_sentence = sentence_buffer.strip()
+#                 if not current_sentence:
+#                     continue
 
-#                 # 文末検出 → 1文ぶんを TTS & Ditto へ
-#                 if any(p in text_piece for p in PUNCTUATIONS):
-#                     current_sentence = sentence_buffer.strip()
-#                     if not current_sentence:
-#                         continue
+#                 # 同期的に TTS + リップシンクを処理
+#                 def process_sentence():
+#                     # 1. TTS で音声生成
+#                     audio_b64 = _tts.synthesize_to_base64(current_sentence)
 
-#                     # TTS はスレッド側で実行
-#                     audio_b64 = await asyncio.to_thread(
-#                         _tts.synthesize_to_base64, current_sentence
-#                     )
+#                     # 2. 音声をnumpy arrayに変換
+#                     audio_array = audio_b64_to_array(audio_b64, target_sr=16000)
 
-#                     # audio_chunk を即イベントキューへ
-#                     await event_queue.put(
-#                         sse_event(
-#                             "audio_chunk",
-#                             {
-#                                 "sentence": current_sentence,
-#                                 "audio": audio_b64,
-#                             },
-#                         )
-#                     )
+#                     # 3. リップシンクフレーム生成 (全フレーム待機)
+#                     frames = avatar_streamer.generate_frames_for_audio(audio_array, sr=16000)
 
-#                     # Ditto に音声を push（これもスレッド側で）
-#                     def push_audio():
-#                         arr = audio_b64_to_array(audio_b64, target_sr=16000)
-#                         avatar_streamer.push_audio_array(arr, sr=16000)
+#                     # 4. フレームをbase64エンコード
+#                     frames_b64 = []
+#                     for frame in frames:
+#                         frame_bgr = frame[:, :, ::-1]
+#                         ok, buf = cv2.imencode(".jpg", frame_bgr)
+#                         if ok:
+#                             frames_b64.append(base64.b64encode(buf).decode("ascii"))
 
-#                     await asyncio.to_thread(push_audio)
+#                     return audio_b64, frames_b64
 
-#                     # 文バッファをリセット
-#                     sentence_buffer = ""
+#                 audio_b64, frames_b64 = await asyncio.to_thread(process_sentence)
 
-#             # 句読点なしで終わった場合の残りの文
-#             if sentence_buffer.strip():
-#                 last_sentence = sentence_buffer.strip()
-#                 audio_b64 = await asyncio.to_thread(
-#                     _tts.synthesize_to_base64, last_sentence
+#                 # 音声とフレームを一緒に送信
+#                 yield sse_event(
+#                     "audio_and_frames",
+#                     {
+#                         "sentence": current_sentence,
+#                         "audio": audio_b64,
+#                         "frames": frames_b64,
+#                         "fps": FPS,
+#                     },
 #                 )
 
-#                 await event_queue.put(
-#                     sse_event(
-#                         "audio_chunk",
-#                         {"sentence": last_sentence, "audio": audio_b64},
-#                     )
-#                 )
+#                 # 文バッファをリセット
+#                 sentence_buffer = ""
 
-#                 def push_audio():
-#                     arr = audio_b64_to_array(audio_b64, target_sr=16000)
-#                     avatar_streamer.push_audio_array(arr, sr=16000)
+#         # 句読点なしで終わった場合の残りの文
+#         if sentence_buffer.strip():
+#             last_sentence = sentence_buffer.strip()
 
-#                 await asyncio.to_thread(push_audio)
+#             def process_last_sentence():
+#                 audio_b64 = _tts.synthesize_to_base64(last_sentence)
+#                 audio_array = audio_b64_to_array(audio_b64, target_sr=16000)
+#                 frames = avatar_streamer.generate_frames_for_audio(audio_array, sr=16000)
 
-#             # もう音声は来ないことを Ditto に通知
-#             avatar_streamer.signal_end()
-
-#         # ---------- Producer 2: Ditto → frame_chunk イベント ----------
-#         async def frame_producer():
-#             # generate_frames() はブロッキングなので to_thread で回す
-#             loop = asyncio.get_running_loop()
-
-#             def _run():
-#                 for frame in avatar_streamer.generate_frames():
-#                     # フレームが 1 枚くるたびにここに入る
+#                 frames_b64 = []
+#                 for frame in frames:
 #                     frame_bgr = frame[:, :, ::-1]
 #                     ok, buf = cv2.imencode(".jpg", frame_bgr)
-#                     if not ok:
-#                         continue
-#                     img_b64 = base64.b64encode(buf).decode("ascii")
+#                     if ok:
+#                         frames_b64.append(base64.b64encode(buf).decode("ascii"))
 
-#                     ev = sse_event(
-#                         "frame_chunk",
-#                         {
-#                             "image": img_b64,
-#                         },
-#                     )
-#                     # メインスレッドの event_loop 上で event_queue に積む
-#                     loop.call_soon_threadsafe(event_queue.put_nowait, ev)
+#                 return audio_b64, frames_b64
 
-#             # 実際にスレッド側で _run を実行
-#             await asyncio.to_thread(_run)
+#             audio_b64, frames_b64 = await asyncio.to_thread(process_last_sentence)
 
-#         # Producer タスクを起動
-#         text_task = asyncio.create_task(text_and_audio_producer())
-#         frame_task = asyncio.create_task(frame_producer())
-#         producers = [text_task, frame_task]
-
-#         # ---------- メインの SSE ループ ----------
-#         while True:
-#             # 両方の producer が終了していて、かつキューが空なら終了
-#             if all(t.done() for t in producers) and event_queue.empty():
-#                 break
-
-#             try:
-#                 # 何かイベントが入るまで待つ（タイムアウトでループ継続）
-#                 ev = await asyncio.wait_for(event_queue.get(), timeout=0.1)
-#             except asyncio.TimeoutError:
-#                 continue
-
-#             # ここで 1 イベントずつクライアントへ送信される
-#             yield ev
+#             yield sse_event(
+#                 "audio_and_frames",
+#                 {
+#                     "sentence": last_sentence,
+#                     "audio": audio_b64,
+#                     "frames": frames_b64,
+#                     "fps": FPS,
+#                 },
+#             )
 
 #         # 最後に完了イベント
 #         yield sse_event("done", {"message": "応答完了"})

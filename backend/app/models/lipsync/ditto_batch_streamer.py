@@ -102,3 +102,101 @@ class AvatarStreamer(StreamSDK):
 
             first_frame_received = True
             yield frame
+
+    def generate_frames_for_audio(self, audio_array: np.ndarray, sr: int = 16000) -> list:
+        """
+        音声データを入力し、対応するリップシンクフレームを全て生成して返す。
+        同期的に処理し、フレームがすべて生成されてからリストとして返す。
+        
+        注意: この関数は終了シグナルを送らないため、複数回呼び出し可能。
+
+        Args:
+            audio_array: 16kHz float32 音声波形
+            sr: サンプリングレート (default: 16000)
+
+        Returns:
+            list[np.ndarray]: 生成されたフレームのリスト
+        """
+        import time
+        
+        # 音声の長さからフレーム数を推定 (fps=25で計算)
+        fps = 25
+        audio_duration = len(audio_array) / sr
+        expected_frames = int(audio_duration * fps)
+        
+        if expected_frames == 0:
+            return []
+
+        # 音声をパイプラインに投入（終了シグナルは送らない）
+        self.push_audio_array(audio_array, sr)
+
+        frames = []
+        start_time = time.time()
+        max_wait_time = audio_duration + 5.0  # 音声長 + バッファ時間
+
+        while len(frames) < expected_frames:
+            try:
+                # タイムアウトを短めにしてポーリング
+                frame = self.frame_output_queue.get(timeout=0.1)
+            except queue.Empty:
+                # 最大待機時間を超えたら終了
+                if time.time() - start_time > max_wait_time:
+                    break
+                continue
+
+            if frame is None:
+                # 終了シグナルを受け取った場合はキューに戻して終了
+                # （他の処理が終了シグナルを必要とする場合のため）
+                self.frame_output_queue.put(None)
+                break
+
+            frames.append(frame)
+
+        return frames
+
+    def stream_frames_for_audio(self, audio_array: np.ndarray, sr: int = 16000):
+        """
+        音声データを入力し、対応するリップシンクフレームを逐次yieldするジェネレータ。
+        
+        Args:
+            audio_array: 16kHz float32 音声波形
+            sr: サンプリングレート (default: 16000)
+
+        Yields:
+            np.ndarray: 生成されたフレーム
+        """
+        import time
+        
+        # 音声の長さからフレーム数を推定 (fps=25で計算)
+        fps = 25
+        audio_duration = len(audio_array) / sr
+        expected_frames = int(audio_duration * fps)
+        
+        if expected_frames == 0:
+            return
+
+        # 音声をパイプラインに投入（終了シグナルは送らない）
+        self.push_audio_array(audio_array, sr)
+
+        frames_count = 0
+        start_time = time.time()
+        max_wait_time = audio_duration + 5.0  # 音声長 + バッファ時間
+
+        while frames_count < expected_frames:
+            try:
+                # タイムアウトを短めにしてポーリング
+                frame = self.frame_output_queue.get(timeout=0.1)
+            except queue.Empty:
+                # 最大待機時間を超えたら終了
+                if time.time() - start_time > max_wait_time:
+                    break
+                continue
+
+            if frame is None:
+                # 終了シグナルを受け取った場合はキューに戻して終了
+                self.frame_output_queue.put(None)
+                break
+
+            yield frame
+            frames_count += 1
+
