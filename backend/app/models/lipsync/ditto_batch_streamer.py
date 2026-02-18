@@ -103,11 +103,13 @@ class AvatarStreamer(StreamSDK):
             first_frame_received = True
             yield frame
 
-    def generate_frames_for_audio(self, audio_array: np.ndarray, sr: int = 16000) -> list:
+    def generate_frames_for_audio(
+        self, audio_array: np.ndarray, sr: int = 16000
+    ) -> list:
         """
         音声データを入力し、対応するリップシンクフレームを全て生成して返す。
         同期的に処理し、フレームがすべて生成されてからリストとして返す。
-        
+
         注意: この関数は終了シグナルを送らないため、複数回呼び出し可能。
 
         Args:
@@ -118,12 +120,12 @@ class AvatarStreamer(StreamSDK):
             list[np.ndarray]: 生成されたフレームのリスト
         """
         import time
-        
+
         # 音声の長さからフレーム数を推定 (fps=25で計算)
         fps = 25
         audio_duration = len(audio_array) / sr
         expected_frames = int(audio_duration * fps)
-        
+
         if expected_frames == 0:
             return []
 
@@ -157,7 +159,7 @@ class AvatarStreamer(StreamSDK):
     def stream_frames_for_audio(self, audio_array: np.ndarray, sr: int = 16000):
         """
         音声データを入力し、対応するリップシンクフレームを逐次yieldするジェネレータ。
-        
+
         Args:
             audio_array: 16kHz float32 音声波形
             sr: サンプリングレート (default: 16000)
@@ -166,12 +168,12 @@ class AvatarStreamer(StreamSDK):
             np.ndarray: 生成されたフレーム
         """
         import time
-        
+
         # 音声の長さからフレーム数を推定 (fps=25で計算)
         fps = 25
         audio_duration = len(audio_array) / sr
         expected_frames = int(audio_duration * fps)
-        
+
         if expected_frames == 0:
             return
 
@@ -199,4 +201,3 @@ class AvatarStreamer(StreamSDK):
 
             yield frame
             frames_count += 1
-
