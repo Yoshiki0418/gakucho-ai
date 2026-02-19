@@ -67,6 +67,13 @@ class PresidentAgent:
         # ストリームモードで実行
         stream_result = Runner.run_streamed(self.agent, message)
         async for event in stream_result.stream_events():
-            # raw_response_event としてテキストデルタがある場合
-            if event.type == "raw_response_event" and hasattr(event.data, "delta"):
-                yield event.data.delta
+            # テキストデルタのみを yield（ツール呼び出し引数は除外）
+            if (
+                event.type == "raw_response_event"
+                and hasattr(event.data, "type")
+                and event.data.type == "response.output_text.delta"
+                and hasattr(event.data, "delta")
+            ):
+                delta = event.data.delta
+                if delta:
+                    yield delta
