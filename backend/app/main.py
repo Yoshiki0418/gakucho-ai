@@ -1,6 +1,16 @@
+import os
+
 from app.routers import audio_stream_router, rag_router, text_chat_router
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Explicitly load from the mounted path (Docker DevContainer)
+env_path = "/workspace/backend/.env"
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+else:
+    load_dotenv()  # Fallback
 
 # =========================================================
 # アプリ初期化
