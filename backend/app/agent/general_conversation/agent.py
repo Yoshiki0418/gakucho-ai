@@ -190,20 +190,35 @@ class GeneralConversationAgent:
         #     "location": location_agent,
         # }
 
-    async def generate(self, user_id: str, message: str, **kwargs) -> str:
-        # 前処理ログ等を入れるならここ
-        result = await Runner.run(self.agent, message)
+    async def generate(
+        self, user_id: str, message: str, history: list[dict] | None = None, **kwargs
+    ) -> str:
+        # 履歴がある場合はメッセージリスト形式で渡す
+        if history:
+            input_messages = history + [{"role": "user", "content": message}]
+        else:
+            input_messages = message
+        result = await Runner.run(self.agent, input_messages)
         return result.final_output
 
     async def stream_generate(
-        self, user_id: str, message: str, **kwargs
+        self,
+        user_id: str,
+        message: str,
+        history: list[dict] | None = None,
+        **kwargs,
     ) -> AsyncIterator[str]:
         """
         ストリーミング応答を返すメソッド。
         LLMの生成途中のチャンクを逐次返します。
         """
+        # 履歴がある場合はメッセージリスト形式で渡す
+        if history:
+            input_messages = history + [{"role": "user", "content": message}]
+        else:
+            input_messages = message
         # ストリームモードで実行
-        stream_result = Runner.run_streamed(self.agent, message)
+        stream_result = Runner.run_streamed(self.agent, input_messages)
         async for event in stream_result.stream_events():
             # raw_response_event としてテキストデルタがある場合
             if event.type == "raw_response_event" and hasattr(event.data, "delta"):

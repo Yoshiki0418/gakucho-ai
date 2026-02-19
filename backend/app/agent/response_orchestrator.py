@@ -24,7 +24,9 @@ class ResponseOrchestrator:
         self.filler_timeout = filler_timeout
 
     # --- RAG ルート処理 ---
-    async def handle_rag(self, user_id: str, text: str) -> AsyncIterator[str]:
+    async def handle_rag(
+        self, user_id: str, text: str, history: list[dict] | None = None
+    ) -> AsyncIterator[str]:
         """
         RAG はフィラーなし
         """
@@ -33,7 +35,7 @@ class ResponseOrchestrator:
 
     # --- 日常対話 + フィラー ---
     async def handle_daily_with_filler(
-        self, user_id: str, text: str
+        self, user_id: str, text: str, history: list[dict] | None = None
     ) -> AsyncIterator[str]:
         """
         - 本応答(OpenAI Agent SDK)をストリーミング
@@ -48,6 +50,7 @@ class ResponseOrchestrator:
         main_iter = self.daily_agent.stream_generate(
             user_id=user_id,
             message=text,
+            history=history,
         ).__aiter__()
 
         # --- 挨拶だけならフィラー不要 ---
@@ -249,7 +252,9 @@ class ResponseOrchestrator:
         return any(t == g for g in greetings)
 
     # --- 外部から呼ぶメイン入口 ---
-    async def stream_response(self, user_id: str, text: str) -> AsyncIterator[str]:
+    async def stream_response(
+        self, user_id: str, text: str, history: list[dict] | None = None
+    ) -> AsyncIterator[str]:
         """
         FastAPI / SSE / WebSocket からはこのメソッドだけ利用
         """
@@ -261,13 +266,14 @@ class ResponseOrchestrator:
         )
 
         if route == "rag":
-            async for chunk in self.handle_rag(user_id, text):
+            async for chunk in self.handle_rag(user_id, text, history=history):
                 yield chunk
         else:
-            # async for chunk in self.handle_daily_with_filler(user_id, text):
+            # async for chunk in self.handle_daily_with_filler(user_id, text, history=history):
             #     yield chunk
             async for chunk in self.daily_agent.stream_generate(
                 user_id=user_id,
                 message=text,
+                history=history,
             ):
                 yield chunk
