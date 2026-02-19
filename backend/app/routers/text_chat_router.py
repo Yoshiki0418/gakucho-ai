@@ -15,6 +15,7 @@ from app.agent.general_conversation.domains import (
     ResearchAgent,
 )
 from app.models import llm, tts
+from app.services.history_service import HistoryService
 
 # from app.models.lipsync.ditto_batch_streamer import AvatarStreamer
 from fastapi import APIRouter, Request
@@ -403,10 +404,42 @@ async def char_stream_agent(request: Request):
 
 conversation_orchestrator = build_conversation_orchestrator()
 
+# --- 対話履歴サービスの初期化 ---
+try:
+    history_service = HistoryService()
+except Exception as e:
+    print(f"[WARNING] HistoryService の初期化に失敗しました: {e}")
+    history_service = None
+
 
 @router.get("/char-stream-orchestrator")
 async def char_stream_orchestrator(request: Request):
     user_input = request.query_params.get("text", "こんにちは！")
+    user_id = request.query_params.get("user_id", "default")
+    session_id = request.query_params.get("session_id", "default")
+
+    # --- 対話履歴の取得 ---
+    history = []
+    if history_service:
+        try:
+            history = history_service.get_recent_history(
+                user_id=user_id, session_id=session_id, n=10
+            )
+        except Exception as e:
+            print(f"[WARNING] 履歴取得に失敗: {e}")
+            history = []
+
+    # --- ユーザーメッセージの保存 ---
+    if history_service:
+        try:
+            history_service.save_message(
+                user_id=user_id,
+                session_id=session_id,
+                role="user",
+                content=user_input,
+            )
+        except Exception as e:
+            print(f"[WARNING] ユーザーメッセージ保存に失敗: {e}")
 
     # モデル選択
     tts_provider = request.query_params.get("tts_provider", None)
@@ -423,13 +456,16 @@ async def char_stream_orchestrator(request: Request):
 
     async def event_stream():
         sentence_buffer = ""
+        full_response = ""  # アシスタント応答全文を蓄積
 
         async for chunk in conversation_orchestrator.stream_response(
-            user_id="1",
+            user_id=user_id,
             text=user_input,
+            history=history,
         ):
             text_piece = str(chunk)
             sentence_buffer += text_piece
+            full_response += text_piece
 
             yield (
                 "data: "
@@ -478,6 +514,18 @@ async def char_stream_orchestrator(request: Request):
                 )
                 + "\n\n"
             )
+
+        # --- アシスタント応答の保存 ---
+        if history_service and full_response.strip():
+            try:
+                history_service.save_message(
+                    user_id=user_id,
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_response.strip(),
+                )
+            except Exception as e:
+                print(f"[WARNING] アシスタント応答保存に失敗: {e}")
 
         yield ("data: " + json.dumps({"type": "done", "message": "応答完了"}) + "\n\n")
 
