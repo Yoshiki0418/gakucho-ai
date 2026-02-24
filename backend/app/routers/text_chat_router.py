@@ -3,6 +3,8 @@ import asyncio
 # import base64
 # import io
 import json
+import re
+import time
 
 # import cv2
 # import numpy as np
@@ -411,9 +413,30 @@ except Exception as e:
     print(f"[WARNING] HistoryService の初期化に失敗しました: {e}")
     history_service = None
 
+# --- 音声出力用テキスト浄化 ---
+_RE_URL = re.compile(r"https?://\S+")
+_RE_PAREN_DOMAIN = re.compile(r"\s*\([a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?\)")
+_RE_MD_LINK = re.compile(r"\[([^\]]+)\]\([^\)]+\)")
+_RE_MD_BOLD = re.compile(r"\*\*([^*]+)\*\*")
+_RE_MD_BULLET = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
+
+
+def _sanitize_for_speech(text: str) -> str:
+    """音声読み上げ向けにURL・出典・マークダウンを除去する"""
+    text = _RE_URL.sub("", text)
+    text = _RE_PAREN_DOMAIN.sub("", text)
+    text = _RE_MD_LINK.sub(r"\1", text)
+    text = _RE_MD_BOLD.sub(r"\1", text)
+    text = _RE_MD_BULLET.sub("", text)
+    # 連続空白・改行を圧縮
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"  +", " ", text)
+    return text
+
 
 @router.get("/char-stream-orchestrator")
 async def char_stream_orchestrator(request: Request):
+    t0 = time.perf_counter()  # === 計測開始 ===
     user_input = request.query_params.get("text", "こんにちは！")
     user_id = request.query_params.get("user_id", "default")
     session_id = request.query_params.get("session_id", "default")
@@ -457,25 +480,39 @@ async def char_stream_orchestrator(request: Request):
     async def event_stream():
         sentence_buffer = ""
         full_response = ""  # アシスタント応答全文を蓄積
+        first_text_logged = False
+        first_audio_logged = False
 
         async for chunk in conversation_orchestrator.stream_response(
             user_id=user_id,
             text=user_input,
             history=history,
         ):
-            text_piece = str(chunk)
-            sentence_buffer += text_piece
-            full_response += text_piece
+            raw_piece = str(chunk)
+            sentence_buffer += raw_piece
 
-            yield (
-                "data: "
-                + json.dumps({"type": "text_chunk", "content": text_piece})
-                + "\n\n"
-            )
+            # --- 初回テキストチャンクの計測 ---
+            if not first_text_logged:
+                ttft = (time.perf_counter() - t0) * 1000
+                print(f"[TIMING] TTFT (Time To First Text): {ttft:.0f}ms")
+                first_text_logged = True
 
-            # 文の終端を検出したら、その文をTTSに渡す
-            if any(p in text_piece for p in PUNCTUATIONS):
-                current_sentence = sentence_buffer.strip()
+            # 文の終端を検出したら、完成した文をサニタイズして出力
+            if any(p in raw_piece for p in PUNCTUATIONS):
+                # 文全体に対してサニタイズ（URL・出典を確実に除去）
+                current_sentence = _sanitize_for_speech(sentence_buffer.strip())
+                if not current_sentence:
+                    sentence_buffer = ""
+                    continue
+
+                full_response += current_sentence
+
+                # テキストを送信
+                yield (
+                    "data: "
+                    + json.dumps({"type": "text_chunk", "content": current_sentence})
+                    + "\n\n"
+                )
 
                 # 並列で音声生成
                 audio_b64 = await asyncio.to_thread(
@@ -495,25 +532,39 @@ async def char_stream_orchestrator(request: Request):
                     + "\n\n"
                 )
 
+                # --- 初回音声チャンクの計測 ---
+                if not first_audio_logged:
+                    ttfa = (time.perf_counter() - t0) * 1000
+                    print(f"[TIMING] TTFA (Time To First Audio): {ttfa:.0f}ms")
+                    first_audio_logged = True
+
                 sentence_buffer = ""
 
         # 最後に残った文を処理
         if sentence_buffer.strip():
-            audio_b64 = await asyncio.to_thread(
-                _tts.synthesize_to_base64,
-                sentence_buffer.strip(),
-            )
-            yield (
-                "data: "
-                + json.dumps(
-                    {
-                        "type": "audio_chunk",
-                        "sentence": sentence_buffer.strip(),
-                        "audio": audio_b64,
-                    }
+            current_sentence = _sanitize_for_speech(sentence_buffer.strip())
+            if current_sentence:
+                full_response += current_sentence
+                yield (
+                    "data: "
+                    + json.dumps({"type": "text_chunk", "content": current_sentence})
+                    + "\n\n"
                 )
-                + "\n\n"
-            )
+                audio_b64 = await asyncio.to_thread(
+                    _tts.synthesize_to_base64,
+                    current_sentence,
+                )
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "type": "audio_chunk",
+                            "sentence": current_sentence,
+                            "audio": audio_b64,
+                        }
+                    )
+                    + "\n\n"
+                )
 
         # --- アシスタント応答の保存 ---
         if history_service and full_response.strip():
@@ -526,6 +577,20 @@ async def char_stream_orchestrator(request: Request):
                 )
             except Exception as e:
                 print(f"[WARNING] アシスタント応答保存に失敗: {e}")
+
+        # --- タイミング情報の送信 ---
+        total_ms = (time.perf_counter() - t0) * 1000
+        print(f"[TIMING] Total response time: {total_ms:.0f}ms")
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "timing",
+                    "total_ms": round(total_ms),
+                }
+            )
+            + "\n\n"
+        )
 
         yield ("data: " + json.dumps({"type": "done", "message": "応答完了"}) + "\n\n")
 

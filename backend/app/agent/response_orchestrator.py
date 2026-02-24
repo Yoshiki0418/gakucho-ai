@@ -228,7 +228,7 @@ class ResponseOrchestrator:
                     message=text,
                     history=None,
                     tool_calls=None,
-                    max_tokens=80,
+                    max_tokens=30,
                     temperature=0.3,
                 ):
                     if piece:
@@ -240,40 +240,176 @@ class ResponseOrchestrator:
         return filler_stream()
 
     def _is_pure_greeting(self, text: str) -> bool:
-        # 「おはよう」「こんにちは」「こんばんは」、とかを検出する簡単なルール
-        t = text.strip()
+        """挨拶だけの発話を検出（部分一致で判定）"""
+        t = text.strip().rstrip("！!〜~。.、")
         greetings = [
             "おはよう",
             "おはようございます",
             "こんにちは",
             "こんばんは",
             "やあ",
+            "はじめまして",
+            "よろしくお願いします",
         ]
-        return any(t == g for g in greetings)
+        return any(
+            t == g or t.startswith(g) and len(t) <= len(g) + 3 for g in greetings
+        )
+
+    async def _start_filler_producer(self, text: str) -> asyncio.Queue:
+        """フィラー LLM のストリームをキューに流すプロデューサを起動"""
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def producer():
+            try:
+                if self._is_pure_greeting(text):
+                    return
+                async for piece in self.filler_llm.stream_generate(
+                    message=text,
+                    history=None,
+                    tool_calls=None,
+                    max_tokens=30,
+                    temperature=0.3,
+                ):
+                    if piece:
+                        await queue.put(piece)
+            except Exception:
+                pass
+            finally:
+                await queue.put(None)  # 終了マーカー
+
+        asyncio.create_task(producer())
+        return queue
 
     # --- 外部から呼ぶメイン入口 ---
     async def stream_response(
         self, user_id: str, text: str, history: list[dict] | None = None
     ) -> AsyncIterator[str]:
         """
-        FastAPI / SSE / WebSocket からはこのメソッドだけ利用
+        FastAPI / SSE / WebSocket からはこのメソッドだけ利用。
+
+        最適化パイプライン:
+        - Classifier / Filler / Main を並列起動
+        - Main の TTFB が timeout 以内なら → フィラーなしで Main を流す
+        - Main が遅ければ → フィラーをストリーミングで即座に出力
+        - フィラー出力後に Classifier 結果をチェックし RAG/dialogue を判定
         """
         start = time.perf_counter()
-        route = await self.classifier_llm.classify_rag_vs_dialogue(text)
-        elapsed = (time.perf_counter() - start) * 1000
-        print(
-            f"[ResponseOrchestrator] route classified as '{route}' in {elapsed:.2f} ms"
+        sentence_end_chars = "。.!?！？"
+
+        # =============================
+        # 3つ同時起動
+        # =============================
+        classifier_task = asyncio.create_task(
+            self.classifier_llm.classify_rag_vs_dialogue(text)
         )
 
-        if route == "rag":
-            async for chunk in self.handle_rag(user_id, text, history=history):
-                yield chunk
-        else:
-            # async for chunk in self.handle_daily_with_filler(user_id, text, history=history):
-            #     yield chunk
-            async for chunk in self.daily_agent.stream_generate(
-                user_id=user_id,
-                message=text,
-                history=history,
-            ):
-                yield chunk
+        # フィラーをキュー経由でストリーミング（バックグラウンド開始）
+        enable_filler = not self._is_pure_greeting(text)
+        filler_queue = (
+            await self._start_filler_producer(text) if enable_filler else None
+        )
+
+        # Main を dialogue 前提で先行起動
+        main_iter = self.daily_agent.stream_generate(
+            user_id=user_id,
+            message=text,
+            history=history,
+        ).__aiter__()
+        main_first_task = asyncio.create_task(main_iter.__anext__())
+
+        try:
+            # =============================
+            # ① Main の TTFB を timeout 付きで待つ
+            # =============================
+            done, _ = await asyncio.wait(
+                {main_first_task},
+                timeout=self.filler_timeout,
+            )
+
+            if main_first_task in done:
+                # --- Main が時間内に応答 → フィラー不要 ---
+                elapsed = (time.perf_counter() - start) * 1000
+                print(
+                    f"[ResponseOrchestrator] Main responded in {elapsed:.0f}ms, no filler needed"
+                )
+
+                # Classifier 結果を確認
+                route = await classifier_task
+                print(
+                    f"[ResponseOrchestrator] route='{route}' in {(time.perf_counter() - start) * 1000:.0f}ms"
+                )
+
+                if route == "rag":
+                    main_first_task.cancel()
+                    async for chunk in self.handle_rag(user_id, text, history=history):
+                        yield chunk
+                    return
+
+                # dialogue → Main の応答を流す
+                try:
+                    first_chunk = main_first_task.result()
+                except StopAsyncIteration:
+                    return
+                if first_chunk:
+                    yield first_chunk
+                async for chunk in main_iter:
+                    if chunk:
+                        yield chunk
+                return
+
+            # =============================
+            # ② Main が遅い → フィラーをストリーミング出力
+            #    ★ Classifier を待たない ★
+            #    ★ 全文収集せず、チャンク単位で即 yield ★
+            # =============================
+            filler_text = ""
+            if enable_filler and filler_queue is not None:
+                while True:
+                    chunk = await filler_queue.get()
+                    if chunk is None:
+                        break
+                    yield chunk
+                    filler_text += chunk
+
+                    # 1文完了したら打ち切り
+                    if any(c in chunk for c in sentence_end_chars):
+                        break
+
+                if filler_text.strip():
+                    elapsed = (time.perf_counter() - start) * 1000
+                    print(
+                        f"[ResponseOrchestrator] filler sent in {elapsed:.0f}ms: '{filler_text.strip()}'"
+                    )
+
+            # =============================
+            # ③ フィラー出力後に Classifier を確認
+            # =============================
+            route = await classifier_task
+            elapsed = (time.perf_counter() - start) * 1000
+            print(f"[ResponseOrchestrator] route='{route}' in {elapsed:.0f}ms")
+
+            if route == "rag":
+                main_first_task.cancel()
+                async for chunk in self.handle_rag(user_id, text, history=history):
+                    yield chunk
+                return
+
+            # =============================
+            # ④ dialogue → Main の応答を流す
+            # =============================
+            try:
+                first_chunk = await main_first_task
+            except StopAsyncIteration:
+                return
+            if first_chunk:
+                yield first_chunk
+            async for chunk in main_iter:
+                if chunk:
+                    yield chunk
+
+        finally:
+            # --- cleanup ---
+            if not classifier_task.done():
+                classifier_task.cancel()
+            if not main_first_task.done():
+                main_first_task.cancel()

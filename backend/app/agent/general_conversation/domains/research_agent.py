@@ -28,6 +28,12 @@ class ResearchAgent:
                 あなたは Research ドメイン専門のエージェントです。
                 WebSearchTool を使って調査できます。
 
+                【最重要ルール】
+                ★ 回答に URL・リンク・ドメイン名・出典を絶対に含めないこと ★
+                ★ (example.com) のような括弧付き出典も絶対に禁止 ★
+                ★ 「〜によると」「〜の記事では」等のソース言及も禁止 ★
+                この回答は音声で読み上げられるため、URLや出典があると不自然になる。
+
                 【回答スタイル】
                 - 調査結果は「会話的・短く・自然な口調」で伝える
                 - 数字の羅列や記事のような硬い説明は禁止
@@ -36,10 +42,12 @@ class ResearchAgent:
                 - 重要数値は必要最小限だけ入れる
 
                 【禁止事項】
-                - URL の直接提示
+                - URL・リンク・ドメイン名の提示（いかなる形式でも）
+                - 括弧内の出典表記（例: (example.com)）
                 - 長文のニュース要約
                 - 表形式の羅列
                 - 論文調・解説調の回答
+                - マークダウン記法（**太字**、箇条書きの - 記号など）
 
                 【返答例】
                 - 「調べてみたところ、今日は少し下がっているみたいですよ」
@@ -63,6 +71,13 @@ class ResearchAgent:
         # ストリームモードで実行
         stream_result = Runner.run_streamed(self.agent, message)
         async for event in stream_result.stream_events():
-            # raw_response_event としてテキストデルタがある場合
-            if event.type == "raw_response_event" and hasattr(event.data, "delta"):
-                yield event.data.delta
+            # テキストデルタのみを yield（ツール呼び出し引数は除外）
+            if (
+                event.type == "raw_response_event"
+                and hasattr(event.data, "type")
+                and event.data.type == "response.output_text.delta"
+                and hasattr(event.data, "delta")
+            ):
+                delta = event.data.delta
+                if delta:
+                    yield delta

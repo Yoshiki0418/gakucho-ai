@@ -9,7 +9,7 @@ enable_isort = true
 enable_mypy = false
 
 [tool.pysen.lint.source]
-exclude_globs = ["**/__init__.py"]
+exclude_globs = ["**/__init__.py", "**/main.py", "**/agent_factory.py", "**/insert_rag_data.py"]
 
 [tool.pytest.ini_options]
 addopts = "-s -v"

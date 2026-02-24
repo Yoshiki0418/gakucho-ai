@@ -3,6 +3,7 @@ import re
 from typing import Optional, Sequence
 
 from app.models.llm import OpenAILLM
+from app.models.llm.base_llm import BaseLLM
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -34,11 +35,15 @@ class LLMDecisionClassifier:
         system_prompt: Optional[str] = None,
         base_instruction: Optional[str] = None,
         temperature: float = 0.0,
+        llm: Optional[BaseLLM] = None,
     ) -> None:
-        self.llm = OpenAILLM(
-            model_name=model_name,
-            system_prompt=system_prompt or self.DEFAULT_SYSTEM_PROMPT,
-        )
+        if llm is not None:
+            self.llm = llm
+        else:
+            self.llm = OpenAILLM(
+                model_name=model_name,
+                system_prompt=system_prompt or self.DEFAULT_SYSTEM_PROMPT,
+            )
         self.base_instruction = base_instruction or self.DEFAULT_INSTRUCTION
         self.temperature = temperature
 

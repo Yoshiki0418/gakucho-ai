@@ -5,7 +5,7 @@ export const base44 = {
       formData.append("file", file);
       formData.append("source", file.name);
 
-      const res = await fetch("http://localhost:8000/rag/upload", {
+      const res = await fetch("http://localhost:8076/rag/upload", {
         method: "POST",
         body: formData,
       });
@@ -19,16 +19,16 @@ export const base44 = {
     },
 
     getStats: async () => {
-      const res = await fetch("http://localhost:8000/rag/stats");
+      const res = await fetch("http://localhost:8076/rag/stats");
       return res.json();
     },
     getRecent: async () => {
-      const res = await fetch("http://localhost:8000/rag/recent");
+      const res = await fetch("http://localhost:8076/rag/recent");
       if (!res.ok) throw new Error("Failed to fetch recent updates");
       return res.json();
     },
     query: async ({ query, top_k = 5, threshold = 0.25 }) => {
-      const res = await fetch("http://localhost:8000/rag/query", {
+      const res = await fetch("http://localhost:8076/rag/query", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

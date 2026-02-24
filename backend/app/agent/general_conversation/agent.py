@@ -10,6 +10,7 @@ from app.agent.general_conversation.domains import (
     ResearchAgent,
 )
 from app.agent.general_conversation.tools import get_current_time, get_weather
+from app.prompts.president_persona import get_president_persona
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,31 +39,25 @@ class GeneralConversationAgent:
         president_agent: PresidentAgent,
         event_greeting_agent: EventGreetingAgent,
     ):
+        president_persona = get_president_persona()
         self.agent = Agent(
             name="GeneralConversationAgent",
             model="gpt-4o-mini",
-            instructions="""
+            instructions=f"""
+            {president_persona}
+
             # =========================================================
             # [A] 学長ペルソナ（※自分で回答する場合のみ有効）
             # =========================================================
-            あなたは金沢工業大学の「学長」です。
-            名前は「大澤 敏」です。
-
             ただし、あなたの主業務は **回答ではなくルーティング（振り分け）** です。
 
             【重要原則】
             - あなたが「自分で回答する」と明示的に判断した場合のみ、
-            以下の学長ペルソナを用いて回答してください。
+            上記で定義された学長ペルソナを用いて回答してください。
             - 専門エージェントへ handoff すると判断した場合は、
             学長としての丁寧さは保ちつつ、簡潔に委譲してください。
             - 学長本人に関する情報（嗜好・経歴・価値観など）を
             推測や創作で補完して回答してはいけません。
-
-            【学長としての口調・価値観】
-            - 丁寧で落ち着いた口調（です・ます）
-            - 相手の理解と前進を助ける（説教しない・寄り添う）
-            - 不確実なことは断定しない（必要なら前提確認）
-            - 簡潔に：結論 → 理由 → 次の一手（提案 or 確認）
             - 安全・法令・倫理に反する依頼には応じない
 
             ---
@@ -174,6 +169,17 @@ class GeneralConversationAgent:
             - 不要に専門的にならない
             - 短く、分かりやすく
             - ユーザーの意図を取りこぼさない
+            - 音声で読み上げられるため、記号(°C, %, km/h)は使わず
+              「度」「パーセント」「キロ」と書く
+
+            # =========================================================
+            # [K] ツール結果の伝え方
+            # =========================================================
+            ★ ツール(get_weather, get_current_time)の結果は、
+              そのまま読み上げず、友達に話すように自然に短く伝える ★
+            - データを箇条書きや一覧にしない
+            - 1〜2文で簡潔にまとめる
+            - 「何か他に知りたいことがあれば」等の定型的な締めは不要
             """,
             tools=[get_current_time, get_weather],
             handoffs=[
@@ -220,11 +226,13 @@ class GeneralConversationAgent:
         # ストリームモードで実行
         stream_result = Runner.run_streamed(self.agent, input_messages)
         async for event in stream_result.stream_events():
-            # raw_response_event としてテキストデルタがある場合
-            if event.type == "raw_response_event" and hasattr(event.data, "delta"):
+            # テキストデルタのみを yield（ツール呼び出し引数は除外）
+            if (
+                event.type == "raw_response_event"
+                and hasattr(event.data, "type")
+                and event.data.type == "response.output_text.delta"
+                and hasattr(event.data, "delta")
+            ):
                 delta = event.data.delta
-
-                if delta.strip() in ("", "{}", "[]"):
-                    continue
-
-                yield event.data.delta
+                if delta:
+                    yield delta
