@@ -22,7 +22,7 @@ from app.prompts.president_persona import get_president_persona
 
 def build_conversation_orchestrator():
     """学長AI全体の構成要素（RAG / Daily Agent / Classifier / Filler）をまとめて初期化"""
-    
+
     # 共通ペルソナを取得
     president_persona = get_president_persona()
 
@@ -81,7 +81,7 @@ C) 確認の予告 — 調査や検索が必要なとき、何を確認するか
         retriever=retriever,
         llm=GemmaLLM(
             model_name="google/gemma-2-2b-jpn-it",
-            system_prompt=f"{president_persona}\n\nあなたはシステム内部で情報検索と要約を担当するRAGモジュールです。与えられたコンテキストに基づいて、回答を生成してください。"
+            system_prompt=f"{president_persona}\n\nあなたはシステム内部で情報検索と要約を担当するRAGモジュールです。与えられたコンテキストに基づいて、回答を生成してください。",
         ),
     )
 
@@ -95,4 +95,3 @@ C) 確認の予告 — 調査や検索が必要なとき、何を確認するか
     )
 
     return orchestrator
-

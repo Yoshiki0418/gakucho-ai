@@ -23,7 +23,7 @@ class PresidentAgent:
 
     def __init__(self):
         president_persona = get_president_persona()
-        
+
         self.agent = Agent(
             name="PresidentAgent",
             model="gpt-4o-mini",
