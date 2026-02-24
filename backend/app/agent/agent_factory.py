@@ -72,7 +72,8 @@ C) 確認の予告 — 調査や検索が必要なとき、何を確認するか
 
     rag_engine = RAGModule(
         retriever=retriever,
-        llm=OpenAILLM(
+        llm=GemmaLLM(
+            model_name="google/gemma-2-2b-jpn-it",
             system_prompt="あなたは金沢工業大学の学生サポートアシスタントです。"
         ),
     )
