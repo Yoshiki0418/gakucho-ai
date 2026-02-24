@@ -500,9 +500,7 @@ async def char_stream_orchestrator(request: Request):
             # 文の終端を検出したら、完成した文をサニタイズして出力
             if any(p in raw_piece for p in PUNCTUATIONS):
                 # 文全体に対してサニタイズ（URL・出典を確実に除去）
-                current_sentence = _sanitize_for_speech(
-                    sentence_buffer.strip()
-                )
+                current_sentence = _sanitize_for_speech(sentence_buffer.strip())
                 if not current_sentence:
                     sentence_buffer = ""
                     continue
@@ -512,9 +510,7 @@ async def char_stream_orchestrator(request: Request):
                 # テキストを送信
                 yield (
                     "data: "
-                    + json.dumps(
-                        {"type": "text_chunk", "content": current_sentence}
-                    )
+                    + json.dumps({"type": "text_chunk", "content": current_sentence})
                     + "\n\n"
                 )
 
@@ -539,9 +535,7 @@ async def char_stream_orchestrator(request: Request):
                 # --- 初回音声チャンクの計測 ---
                 if not first_audio_logged:
                     ttfa = (time.perf_counter() - t0) * 1000
-                    print(
-                        f"[TIMING] TTFA (Time To First Audio): {ttfa:.0f}ms"
-                    )
+                    print(f"[TIMING] TTFA (Time To First Audio): {ttfa:.0f}ms")
                     first_audio_logged = True
 
                 sentence_buffer = ""
@@ -553,9 +547,7 @@ async def char_stream_orchestrator(request: Request):
                 full_response += current_sentence
                 yield (
                     "data: "
-                    + json.dumps(
-                        {"type": "text_chunk", "content": current_sentence}
-                    )
+                    + json.dumps({"type": "text_chunk", "content": current_sentence})
                     + "\n\n"
                 )
                 audio_b64 = await asyncio.to_thread(

@@ -7,8 +7,8 @@
 """
 
 import json
-import urllib.request
 import urllib.parse
+import urllib.request
 
 from agents import function_tool
 
@@ -76,13 +76,15 @@ def _is_kit_reference(place: str) -> bool:
 
 def _nominatim_geocode(place: str) -> tuple[float, float, str] | None:
     """Nominatim で場所名 → 緯度経度"""
-    params = urllib.parse.urlencode({
-        "q": place,
-        "format": "json",
-        "limit": 1,
-        "countrycodes": "jp",
-        "accept-language": "ja",
-    })
+    params = urllib.parse.urlencode(
+        {
+            "q": place,
+            "format": "json",
+            "limit": 1,
+            "countrycodes": "jp",
+            "accept-language": "ja",
+        }
+    )
     url = f"https://nominatim.openstreetmap.org/search?{params}"
 
     try:
@@ -135,12 +137,8 @@ def _build_overpass_query(
     queries = []
     for tags in tags_list:
         tag_filters = "".join(f'["{k}"="{v}"]' for k, v in tags.items())
-        queries.append(
-            f'  node{tag_filters}(around:{radius},{lat},{lon});'
-        )
-        queries.append(
-            f'  way{tag_filters}(around:{radius},{lat},{lon});'
-        )
+        queries.append(f"  node{tag_filters}(around:{radius},{lat},{lon});")
+        queries.append(f"  way{tag_filters}(around:{radius},{lat},{lon});")
 
     query_body = "\n".join(queries)
     return f"[out:json][timeout:10];\n(\n{query_body}\n);\nout center body qt 10;"
@@ -168,8 +166,10 @@ def _format_place_name(element: dict) -> str | None:
 
 
 def _osrm_route(
-    origin_lon: float, origin_lat: float,
-    dest_lon: float, dest_lat: float,
+    origin_lon: float,
+    origin_lat: float,
+    dest_lon: float,
+    dest_lat: float,
     profile: str = "car",
 ) -> dict | None:
     """OSRM で2点間のルート情報を取得"""

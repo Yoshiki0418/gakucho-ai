@@ -2,12 +2,8 @@ import os
 from typing import AsyncIterator
 
 from agents import Agent, Runner, WebSearchTool
+from app.agent.general_conversation.tools import get_travel_info, search_nearby_places
 from dotenv import load_dotenv
-
-from app.agent.general_conversation.tools import (
-    get_travel_info,
-    search_nearby_places,
-)
 
 load_dotenv()
 

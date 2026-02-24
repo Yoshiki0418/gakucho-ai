@@ -5,8 +5,8 @@
 """
 
 import json
-import urllib.request
 import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
 
 from agents import function_tool
@@ -59,12 +59,14 @@ _WHEN_OFFSETS: dict[str, int] = {
 
 def _geocode(city: str) -> tuple[float, float, str] | None:
     """都市名から緯度・経度を取得する（Open-Meteo Geocoding API）"""
-    params = urllib.parse.urlencode({
-        "name": city,
-        "count": 1,
-        "language": "ja",
-        "format": "json",
-    })
+    params = urllib.parse.urlencode(
+        {
+            "name": city,
+            "count": 1,
+            "language": "ja",
+            "format": "json",
+        }
+    )
     url = f"https://geocoding-api.open-meteo.com/v1/search?{params}"
 
     try:
@@ -85,13 +87,15 @@ def _geocode(city: str) -> tuple[float, float, str] | None:
 
 def _fetch_current(lat: float, lon: float) -> dict | None:
     """現在の天気を取得する"""
-    params = urllib.parse.urlencode({
-        "latitude": lat,
-        "longitude": lon,
-        "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
-        "timezone": "Asia/Tokyo",
-        "forecast_days": 1,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "latitude": lat,
+            "longitude": lon,
+            "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+            "timezone": "Asia/Tokyo",
+            "forecast_days": 1,
+        }
+    )
     url = f"https://api.open-meteo.com/v1/forecast?{params}"
 
     try:
@@ -106,14 +110,16 @@ def _fetch_current(lat: float, lon: float) -> dict | None:
 
 def _fetch_daily(lat: float, lon: float, target_date: str) -> dict | None:
     """指定日の天気予報を取得する（target_date: YYYY-MM-DD）"""
-    params = urllib.parse.urlencode({
-        "latitude": lat,
-        "longitude": lon,
-        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max",
-        "timezone": "Asia/Tokyo",
-        "start_date": target_date,
-        "end_date": target_date,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "latitude": lat,
+            "longitude": lon,
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max",
+            "timezone": "Asia/Tokyo",
+            "start_date": target_date,
+            "end_date": target_date,
+        }
+    )
     url = f"https://api.open-meteo.com/v1/forecast?{params}"
 
     try:
@@ -194,7 +200,11 @@ def get_weather(city: str, when: str = "今") -> str:
     precip = daily["precip_prob"]
     wind_max = daily["wind_max"]
 
-    when_label = when if when in ("明日", "明後日", "明々後日") else f"{target.month}月{target.day}日"
+    when_label = (
+        when
+        if when in ("明日", "明後日", "明々後日")
+        else f"{target.month}月{target.day}日"
+    )
 
     return (
         f"{resolved_name}の{when_label}の天気は{description}の予報で、"

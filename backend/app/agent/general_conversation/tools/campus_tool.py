@@ -4,7 +4,6 @@
 RAG (pgvector) から検索して返します。
 """
 
-import json
 import os
 from typing import Any
 

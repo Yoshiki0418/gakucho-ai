@@ -241,4 +241,3 @@ class GeneralConversationAgent:
                 delta = event.data.delta
                 if delta:
                     yield delta
-
