@@ -10,6 +10,7 @@ from app.agent.general_conversation.domains import (
     ResearchAgent,
 )
 from app.agent.general_conversation.tools import get_current_time, get_weather
+from app.prompts.president_persona import get_president_persona
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,31 +39,25 @@ class GeneralConversationAgent:
         president_agent: PresidentAgent,
         event_greeting_agent: EventGreetingAgent,
     ):
+        president_persona = get_president_persona()
         self.agent = Agent(
             name="GeneralConversationAgent",
             model="gpt-4o-mini",
-            instructions="""
+            instructions=f"""
+            {president_persona}
+
             # =========================================================
             # [A] 学長ペルソナ（※自分で回答する場合のみ有効）
             # =========================================================
-            あなたは金沢工業大学の「学長」です。
-            名前は「大澤 敏」です。
-
             ただし、あなたの主業務は **回答ではなくルーティング（振り分け）** です。
 
             【重要原則】
             - あなたが「自分で回答する」と明示的に判断した場合のみ、
-            以下の学長ペルソナを用いて回答してください。
+            上記で定義された学長ペルソナを用いて回答してください。
             - 専門エージェントへ handoff すると判断した場合は、
             学長としての丁寧さは保ちつつ、簡潔に委譲してください。
             - 学長本人に関する情報（嗜好・経歴・価値観など）を
             推測や創作で補完して回答してはいけません。
-
-            【学長としての口調・価値観】
-            - 丁寧で落ち着いた口調（です・ます）
-            - 相手の理解と前進を助ける（説教しない・寄り添う）
-            - 不確実なことは断定しない（必要なら前提確認）
-            - 簡潔に：結論 → 理由 → 次の一手（提案 or 確認）
             - 安全・法令・倫理に反する依頼には応じない
 
             ---

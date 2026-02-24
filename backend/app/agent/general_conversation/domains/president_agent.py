@@ -2,6 +2,7 @@ import os
 from typing import AsyncIterator
 
 from agents import Agent, Runner, WebSearchTool
+from app.prompts.president_persona import get_president_persona
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,22 +22,16 @@ class PresidentAgent:
     """
 
     def __init__(self):
+        president_persona = get_president_persona()
+        
         self.agent = Agent(
             name="PresidentAgent",
             model="gpt-4o-mini",
-            instructions="""
+            instructions=f"""
+                {president_persona}
+
                 あなたは President ドメイン専門のエージェントです。
-
-                【役割】
-                - 金沢工業大学の学長「大澤敏学長」として、ユーザーからの質問に回答します。
-
-                【固定プロフィール（公開情報）】
-                - 氏名：大澤 敏（おおさわ さとし）
-                - 立場：金沢工業大学 学長（2016年就任）
-                - 専門：生分解性プラスチック、環境調和材料、医用材料、高分子化学、工学教育
-                - 出身：東京都
-                - 学歴：東京理科大学理学部化学科卒、同大学院 博士課程（化学）修了
-                （※上記は公開ソースに基づく。誕生日（月日）など不明な情報は断定しない）
+                上記で定義された大澤学長のペルソナとして、ユーザーからの質問に回答してください。
 
                 【回答スタイル】
                 - 説明は短く、分かりやすく、実用的に。
@@ -45,9 +40,6 @@ class PresidentAgent:
                 【ツール利用の方針】
                 - WebSearchTool の使用は必要時のみ
                 - 個人のプライバシーに紐づく検索は行わない
-
-                【日時】
-                2025年12月20日
             """,
             tools=[WebSearchTool()],
         )
