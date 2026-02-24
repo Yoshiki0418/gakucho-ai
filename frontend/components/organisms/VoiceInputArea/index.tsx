@@ -8,6 +8,7 @@ type VoiceInputAreaProps = {
   onTranscript: (text: string) => void
   disabled?: boolean
   isAISpeaking?: boolean
+  onInterrupt?: () => void
 }
 
 /**
@@ -47,6 +48,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   onTranscript,
   disabled = false,
   isAISpeaking = false,
+  onInterrupt,
 }) => {
   const [isListening, setIsListening] = useState(false)
   const [audioLevel, setAudioLevel] = useState(0)
@@ -57,6 +59,11 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const skipAutoRestartRef = useRef(false)
+
+  const propsRef = useRef({ onTranscript, isAISpeaking, onInterrupt })
+  useEffect(() => {
+    propsRef.current = { onTranscript, isAISpeaking, onInterrupt }
+  }, [onTranscript, isAISpeaking, onInterrupt])
 
   // --- 音声認識の初期化 ---
   useEffect(() => {
@@ -91,6 +98,11 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
 
       setPreviewText(interim || finalText)
 
+      const { onTranscript, isAISpeaking, onInterrupt } = propsRef.current
+      if ((interim || finalText) && isAISpeaking && onInterrupt) {
+        onInterrupt()
+      }
+
       if (finalText) {
         skipAutoRestartRef.current = true
         onTranscript(finalText)
@@ -124,7 +136,9 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   // --- 音声レベルの更新 ---
   const startAudioLevelMeter = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      })
       const AudioCtx =
         (window as any).AudioContext || (window as any).webkitAudioContext
       const audioCtx: AudioContext = new AudioCtx()
@@ -151,7 +165,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   }
 
   const startListening = async () => {
-    if (!recognitionRef.current || disabled || isAISpeaking) return
+    if (!recognitionRef.current || disabled) return
     await startAudioLevelMeter()
     recognitionRef.current.start()
     setIsListening(true)
@@ -173,6 +187,9 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
     if (isListening) {
       stopListening()
     } else {
+      if (propsRef.current.isAISpeaking && propsRef.current.onInterrupt) {
+        propsRef.current.onInterrupt()
+      }
       startListening()
     }
   }
@@ -206,7 +223,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
     return bars
   }
 
-  const disabledAll = disabled || isAISpeaking
+  const disabledAll = disabled
 
   return (
     <div style={{ width: '100%', padding: '4px 0' }}>
@@ -251,8 +268,8 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
               color: isAISpeaking
                 ? '#60A5FA'
                 : isListening
-                ? '#FCA5A5'
-                : '#9CA3AF',
+                  ? '#FCA5A5'
+                  : '#9CA3AF',
             }}
           >
             {isAISpeaking ? (

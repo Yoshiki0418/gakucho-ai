@@ -64,7 +64,7 @@ export function useTextChat(endpoint: string) {
     }
 
     if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume().catch(() => {})
+      audioCtxRef.current.resume().catch(() => { })
     }
   }
 
@@ -138,7 +138,7 @@ export function useTextChat(endpoint: string) {
     const ctx = audioCtxRef.current
     if (!ctx) return
     queueClearedRef.current = true
-    ctx.close().catch(() => {})
+    ctx.close().catch(() => { })
     audioCtxRef.current = null
     playbackTimeRef.current = 0
     currentAssistantIdRef.current = null
@@ -279,5 +279,6 @@ export function useTextChat(endpoint: string) {
     speakingMessageId,
     resetChat,
     avatarFrameSrc,
+    interruptChat: stopAllAudio,
   }
 }
