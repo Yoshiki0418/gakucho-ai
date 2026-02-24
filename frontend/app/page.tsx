@@ -9,8 +9,8 @@ export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
 
-  const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc} =
-  useTextChat('/api/text-chat/char-stream-orchestrator')
+  const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc, interruptChat } =
+    useTextChat('/api/text-chat/char-stream-orchestrator')
 
   const handleMicClick = () => {
     console.log('🎙️ Mic clicked')
@@ -61,10 +61,11 @@ export default function ChatDemoPage() {
           onChange={(e) => setInputValue(e.target.value)}
           onMicClick={handleMicClick}
           onTemplateClick={handleTemplateClick}
-          onSend={handleSend}      
+          onSend={handleSend}
           isSending={isSending}
-          onResetChat={resetChat} 
+          onResetChat={resetChat}
           speakingMessageId={speakingMessageId}
+          onInterrupt={interruptChat}
         />
         <AvatarPanel frameSrc={avatarFrameSrc} />
       </section>

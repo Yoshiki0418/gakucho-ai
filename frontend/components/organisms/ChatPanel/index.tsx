@@ -58,6 +58,7 @@ interface ChatPanelProps {
   inputModeProp?: InputMode
   onInputModeChange?: (mode: InputMode) => void
   onResetChat?: () => void
+  onInterrupt?: () => void
 }
 
 export default function ChatPanel({
@@ -72,6 +73,7 @@ export default function ChatPanel({
   inputModeProp,
   onInputModeChange,
   onResetChat,
+  onInterrupt,
 }: ChatPanelProps) {
   const hasMessages = messages.length > 0
   const [internalMode, setInternalMode] = useState<InputMode>('text')
@@ -110,9 +112,9 @@ export default function ChatPanel({
     >
       {/* Header ... */}
       <Flex
-        $flex_direction="row"              
-        $justifyContent="space-between"    
-        $alignItems="center"             
+        $flex_direction="row"
+        $justifyContent="space-between"
+        $alignItems="center"
         $width="100%"
         $padding="18px 20px 14px"
         $backgroundColor="rgba(15,23,42,0.9)"
@@ -227,6 +229,7 @@ export default function ChatPanel({
             <VoiceInputArea
               disabled={disabled}
               isAISpeaking={Boolean(speakingMessageId)}
+              onInterrupt={onInterrupt}
               onTranscript={(text) => {
                 onSend(text)
               }}
