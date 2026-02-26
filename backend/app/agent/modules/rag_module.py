@@ -93,7 +93,7 @@ class RAGModule:
         tool_calls: Optional[List[dict[str, str]]] = None,
     ) -> str:
         """
-        🔹 通常の RAG 実行（最終回答まで返す）
+        通常の RAG 実行（最終回答まで返す）
 
         Agent からの工具利用にも適する。
         """
