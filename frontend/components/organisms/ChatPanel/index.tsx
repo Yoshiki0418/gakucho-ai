@@ -245,7 +245,7 @@ export default function ChatPanel({
               lineHeight: 1.4,
             }}
           >
-            学長AIはAIによる回答です。正確でない場合があります。
+            学長AIはAIによる回答です。不正確な情報が含まれる場合があります。
           </p>
         </Flex>
       </Flex>
