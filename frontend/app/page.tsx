@@ -4,12 +4,14 @@ import React, { useState } from 'react'
 import ChatPanel from '@/components/organisms/ChatPanel'
 import { useTextChat } from '@/features/text-chat/hooks/useTextChat'
 import { AvatarPanel } from '@/components/organisms/AvatarPanel'
+import { QRCodeDisplay } from '@/components/organisms/QRCodeDisplay'
 
 export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [closedUrls, setClosedUrls] = useState<Set<string>>(new Set())
 
-  const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc, interruptChat } =
+  const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc, latestUrl, interruptChat } =
     useTextChat('/api/text-chat/char-stream-orchestrator')
 
   const handleMicClick = () => {
@@ -33,6 +35,17 @@ export default function ChatDemoPage() {
   const handleTemplateClick = (text: string) => {
     setInputValue(text)
     handleSend(text)
+  }
+
+
+
+  // ユーザーが閉じたURLでなければ表示する
+  const displayUrl = latestUrl && !closedUrls.has(latestUrl) ? latestUrl : null
+
+  const handleCloseQRCode = () => {
+    if (latestUrl) {
+      setClosedUrls((prev) => new Set(prev).add(latestUrl))
+    }
   }
 
   return (
@@ -67,7 +80,10 @@ export default function ChatDemoPage() {
           speakingMessageId={speakingMessageId}
           onInterrupt={interruptChat}
         />
-        <AvatarPanel frameSrc={avatarFrameSrc} />
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          <AvatarPanel frameSrc={avatarFrameSrc} />
+          <QRCodeDisplay url={displayUrl} onClose={handleCloseQRCode} />
+        </div>
       </section>
     </main>
   )

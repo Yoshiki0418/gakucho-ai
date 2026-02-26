@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS ohsawa_context (
     context TEXT,
     embedding VECTOR(768),   -- SentenceTransformer出力
     source TEXT,             -- CSV元ファイル名など
+    source_url TEXT,         -- 参照URL
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE (context, source)  -- context＋sourceの組み合わせで一意制約

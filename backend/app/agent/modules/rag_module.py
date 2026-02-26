@@ -62,16 +62,23 @@ class RAGModule:
         template = self.load_prompt(template_name)
 
         # --- コンテキスト整形 ---
+        def format_doc(i: int, d: Dict[str, Any]) -> str:
+            text = f"[{i+1}] (score={d['similarity']:.3f})\n{d['context']}"
+            if d.get("source_url"):
+                text += f"\n参考URL: {d['source_url']}"
+            return text
+
         context_text = "\n\n".join(
-            [
-                f"[{i+1}] (score={d['similarity']:.3f})\n{d['context']}"
-                for i, d in enumerate(retrieved_docs)
-            ]
+            [format_doc(i, d) for i, d in enumerate(retrieved_docs)]
         )
 
         # --- テンプレート置換 ---
         prompt = template.replace("{{query}}", query)
         prompt = prompt.replace("{{context}}", context_text)
+
+        print(f"\n[DEBUG RAG] ===================")
+        print(f"Retrieved Context:\n{context_text}")
+        print(f"=================================\n")
 
         return prompt
 
@@ -97,10 +104,10 @@ class RAGModule:
         # 2. プロンプト構築
         prompt = self.build_prompt(query, docs, template_name)
 
-        # 3. LLM で応答
+        # 3. LLM で応答（RAGは検索結果のみで完結するため、過去会話履歴は渡さない）
         response = await self.llm.generate(
             message=prompt,
-            history=history or [],
+            history=[],
             tool_calls=tool_calls,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
@@ -131,10 +138,10 @@ class RAGModule:
         # 2. プロンプト構築
         prompt = self.build_prompt(query, docs, template_name)
 
-        # 3. ストリーム応答
+        # 3. ストリーム応答（RAGは検索結果のみで完結するため、過去会話履歴は渡さない）
         async for chunk in self.llm.stream_generate(
             message=prompt,
-            history=history or [],
+            history=[],
             tool_calls=tool_calls,
             max_tokens=self.max_tokens,
             temperature=self.temperature,

@@ -68,7 +68,7 @@ class Retriever:
             where_sql = "WHERE " + " AND ".join(conditions)
 
         sql = f"""
-            SELECT id, context, source,
+            SELECT id, context, source, source_url,
                    1 - (embedding <=> %s::vector) AS sim
             FROM ohsawa_context
             {where_sql}
@@ -86,10 +86,11 @@ class Retriever:
                 "id": r[0],
                 "context": r[1],
                 "source": r[2],
-                "similarity": float(r[3]),
+                "source_url": r[3],
+                "similarity": float(r[4]),
             }
             for r in rows
-            if float(r[3]) >= threshold
+            if float(r[4]) >= threshold
         ]
 
         return results

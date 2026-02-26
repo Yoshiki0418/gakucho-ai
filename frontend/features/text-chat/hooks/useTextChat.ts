@@ -23,13 +23,19 @@ type SSEFrame = {
   fps?: number
 }
 type SSEDone = { type: 'done'; message?: string }
+type SSEMetadata = {
+  type: 'metadata_chunk'
+  dataType: string
+  content: string
+}
 // ★ any 付きの index signature は削除
-type SSEAny = SSEText | SSEAudio | SSEFrame | SSEDone
+type SSEAny = SSEText | SSEAudio | SSEFrame | SSEDone | SSEMetadata
 
 export function useTextChat(endpoint: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
   const [avatarFrameSrc, setAvatarFrameSrc] = useState<string | null>(null) // ★ 最新フレーム
+  const [latestUrl, setLatestUrl] = useState<string | null>(null)
 
   const eventSourceRef = useRef<EventSource | null>(null)
   const currentAssistantIdRef = useRef<string | null>(null)
@@ -45,6 +51,7 @@ export function useTextChat(endpoint: string) {
     setMessages([])
     setSpeakingMessageId(null)
     setAvatarFrameSrc(null)
+    setLatestUrl(null)
     currentAssistantIdRef.current = null
   }
 
@@ -149,6 +156,7 @@ export function useTextChat(endpoint: string) {
   const startChat = (userText: string) => {
     // 新しい会話のたびにオーディオはリセット
     stopAllAudio()
+    setLatestUrl(null)
 
     // ユーザーメッセージ追加
     setMessages((prev) => [
@@ -219,6 +227,18 @@ export function useTextChat(endpoint: string) {
           return
         }
 
+        // 🟦 メタデータチャンク
+        if (data.type === 'metadata_chunk') {
+          if (data.dataType === 'url') {
+            let url = data.content
+            if (url.startsWith('www.')) {
+              url = `https://${url}`
+            }
+            setLatestUrl(url)
+          }
+          return
+        }
+
         // 🟦 完了イベント
         if (data.type === 'done') {
           setMessages((prev) => {
@@ -279,6 +299,7 @@ export function useTextChat(endpoint: string) {
     speakingMessageId,
     resetChat,
     avatarFrameSrc,
+    latestUrl,
     interruptChat: stopAllAudio,
   }
 }

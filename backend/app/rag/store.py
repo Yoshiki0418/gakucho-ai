@@ -87,6 +87,12 @@ class RAGStore:
             )
 
         contexts = df["context"].tolist()
+        
+        # source_url列がない場合は空文字を補完
+        if "source_url" in df.columns:
+            source_urls = df["source_url"].tolist()
+        else:
+            source_urls = [""] * len(df)
 
         docs = [f"検索文書: {c}" for c in contexts]
         embeddings = self.model.encode(docs, convert_to_tensor=True, device=self.device)
@@ -94,7 +100,7 @@ class RAGStore:
 
         # ★ autocommit=True 前提なので connection の with はやめる
         with self.conn.cursor() as cur:
-            for context, emb in zip(contexts, embeddings):
+            for context, emb, source_url in zip(contexts, embeddings, source_urls):
                 emb_list = emb.cpu().tolist()
                 source = source_name or os.path.basename(csv_path)
 
@@ -102,11 +108,11 @@ class RAGStore:
                     # --- まずINSERT試行 ---
                     cur.execute(
                         """
-                        INSERT INTO ohsawa_context (context, embedding, source, created_at, updated_at)
-                        VALUES (%s, %s, %s, NOW(), NOW())
-                        ON CONFLICT DO NOTHING
+                        INSERT INTO ohsawa_context (context, embedding, source, source_url, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, NOW(), NOW())
+                        ON CONFLICT (context, source) DO NOTHING
                         """,
-                        (context, emb_list, source),
+                        (context, emb_list, source, source_url),
                     )
 
                     if cur.rowcount > 0:
@@ -117,10 +123,10 @@ class RAGStore:
                     cur.execute(
                         """
                         UPDATE ohsawa_context
-                        SET embedding = %s, updated_at = NOW()
+                        SET embedding = %s, source_url = %s, updated_at = NOW()
                         WHERE context = %s AND source = %s
                         """,
-                        (emb_list, context, source),
+                        (emb_list, source_url, context, source),
                     )
 
                     if cur.rowcount > 0:
