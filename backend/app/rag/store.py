@@ -87,7 +87,7 @@ class RAGStore:
             )
 
         contexts = df["context"].tolist()
-        
+
         # source_url列がない場合は空文字を補完
         if "source_url" in df.columns:
             source_urls = df["source_url"].tolist()
