@@ -76,9 +76,9 @@ class RAGModule:
         prompt = template.replace("{{query}}", query)
         prompt = prompt.replace("{{context}}", context_text)
 
-        print(f"\n[DEBUG RAG] ===================")
+        print("\n[DEBUG RAG] ===================")
         print(f"Retrieved Context:\n{context_text}")
-        print(f"=================================\n")
+        print("=================================\n")
 
         return prompt
 
