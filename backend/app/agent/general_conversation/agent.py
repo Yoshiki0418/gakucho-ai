@@ -42,7 +42,7 @@ class GeneralConversationAgent:
         president_persona = get_president_persona()
         self.agent = Agent(
             name="GeneralConversationAgent",
-            model="gpt-4o-mini",
+            model="gpt-5.2",
             instructions=f"""
             {president_persona}
 

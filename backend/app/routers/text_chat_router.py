@@ -499,8 +499,32 @@ async def char_stream_orchestrator(request: Request):
 
             # 文の終端を検出したら、完成した文をサニタイズして出力
             if any(p in raw_piece for p in PUNCTUATIONS):
+                raw_sentence_for_metadata = sentence_buffer.strip()
+
+                # --- URLを抽出してメタデータとして送信 ---
+                # "www." または "http(s)://" から始まり、改行などで途切れるまでを抽出
+                _url_regex = re.compile(
+                    r"(https?://[^\s()（）「」]+|www\.[^\s()（）「」]+)"
+                )
+                urls = _url_regex.findall(raw_sentence_for_metadata)
+                if urls:
+                    for url in urls:
+                        # 句読点などが末尾についていれば除去
+                        clean_url = re.sub(r"[。！？!?()（）「」]+$", "", url)
+                        yield (
+                            "data: "
+                            + json.dumps(
+                                {
+                                    "type": "metadata_chunk",
+                                    "dataType": "url",
+                                    "content": clean_url,
+                                }
+                            )
+                            + "\n\n"
+                        )
+
                 # 文全体に対してサニタイズ（URL・出典を確実に除去）
-                current_sentence = _sanitize_for_speech(sentence_buffer.strip())
+                current_sentence = _sanitize_for_speech(raw_sentence_for_metadata)
                 if not current_sentence:
                     sentence_buffer = ""
                     continue
@@ -542,7 +566,29 @@ async def char_stream_orchestrator(request: Request):
 
         # 最後に残った文を処理
         if sentence_buffer.strip():
-            current_sentence = _sanitize_for_speech(sentence_buffer.strip())
+            raw_sentence_for_metadata = sentence_buffer.strip()
+
+            # --- URLを抽出してメタデータとして送信 ---
+            _url_regex = re.compile(
+                r"(https?://[^\s()（）「」]+|www\.[^\s()（）「」]+)"
+            )
+            urls = _url_regex.findall(raw_sentence_for_metadata)
+            if urls:
+                for url in urls:
+                    clean_url = re.sub(r"[。！？!?()（）「」]+$", "", url)
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "type": "metadata_chunk",
+                                "dataType": "url",
+                                "content": clean_url,
+                            }
+                        )
+                        + "\n\n"
+                    )
+
+            current_sentence = _sanitize_for_speech(raw_sentence_for_metadata)
             if current_sentence:
                 full_response += current_sentence
                 yield (

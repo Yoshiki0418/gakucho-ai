@@ -75,19 +75,32 @@ class LLMDecisionClassifier:
     async def classify_rag_vs_dialogue(self, user_input: str) -> str:
         labels = ["rag", "dialogue"]
         rules = """
-            あなたは金沢工業大学内AIアシスタントです。
-            以下のユーザー発話が「学内情報」に関する質問かどうかを判定してください。
+            あなたは金沢工業大学（KIT）内AIアシスタントです。
+            ユーザーの質問に答えるために「KIT固有のデータベース（学内情報）」が必要かどうかを判断してください。
 
-            ### 学内情報の例
-            - 授業・講義・教員・学科・研究室・施設（例：図書館、学食、体育館）
-            - イベント・スケジュール・履修登録・奨学金・学生支援・アクセス案内
-            - 大学名（金沢工業大学、KIT）に関する話題
-            - 学内システム（KITナビ、ポータル、Moodleなど）
+            ## 判断の最重要基準
+            「この質問の答えは、KITの学内データベースを検索しなければ得られないか？」
+            → YES → "rag"
+            → NO（一般知識・LLM・Webで答えられる） → "dialogue"
 
-            ### ルール
-            - 上記のような「学内関連情報」を尋ねている場合は "rag"
-            - 挨拶、雑談、感想、AIへの意見などは "dialogue"
-            - 出力は "rag" または "dialogue" のどちらか一語のみ
+            ## "rag" にすべき例（KIT固有データが必要）
+            - 特定の教員・研究室・授業・学科・施設の情報（例：〇〇先生の研究室は？、食堂の営業時間は？）
+            - 履修登録・奨学金・学内イベントなどのKIT独自のスケジュール・手続き
+            - 研究テーマや就職先についてKITの学科・研究室と紐づけて相談したい場合
+            - KITへのアクセス方法、学内システム（KITナビ、Moodle等）の使い方
+
+            ## "dialogue" にすべき例（一般知識で答えられる）
+            - 挨拶・雑談・感情的な会話（「こんにちは」「疲れた」「ありがとう」など）
+            - 一般的なAI・技術・科学・社会のトレンドや知識（例：最近のAIのトレンドを教えて）
+            - 数学・英語・プログラミングの一般的な質問（KIT固有でない）
+            - KITとは無関係の天気・時事・娯楽・料理・スポーツなどの話題
+
+            ## 判断に迷う場合のルール
+            - このアシスタントはKITの学内専用です。ユーザーが「大学」「学校」「うちの大学」など特定の大学名を明示しない場合も、KITのことを指していると判断し "rag" とすること。
+              （例：「大学にキャンパスはいくつある？」「学食はどこにある？」→ KITについての質問として "rag"）
+            - 「KITの〇〇を教えて」のようにKITが明示されていれば当然 "rag"
+            - KITや大学と全く無関係で、一般知識で十分に答えられる内容のみ "dialogue"
+            - 「研究について相談したい」のように学業・学科がらみで文脈が不明瞭な場合は "rag"（学内相談として扱う）
             """
         return await self.classify(user_input, labels=labels, context_rules=rules)
 
@@ -181,10 +194,19 @@ if __name__ == "__main__":
             "今日の金沢の天気を教えてください。",
             "今何時ですか？",
             "金沢駅からKITまでの行き方を教えてください。",
+            "研究テーマについて相談したいです。",
+            "情報工学科でおすすめの研究室はありますか？",
+            "こんにちは、今日はいい天気ですね。",
         ]
 
+        print("=== Complexity Test ===")
         for input_text in test_inputs:
             label = await classifier.classify_complexity(input_text)
-            print(f"Input: {input_text}\nClassified as: {label}\n")
+            print(f"[{label}] {input_text}")
+
+        print("\n=== RAG vs Dialogue Test ===")
+        for input_text in test_inputs:
+            label = await classifier.classify_rag_vs_dialogue(input_text)
+            print(f"[{label}] {input_text}")
 
     asyncio.run(main())

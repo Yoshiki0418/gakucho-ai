@@ -235,6 +235,18 @@ export default function ChatPanel({
               }}
             />
           )}
+          {/* 免責テキスト */}
+          <p
+            style={{
+              margin: 0,
+              textAlign: 'center',
+              fontSize: '0.72rem',
+              color: 'rgba(148,163,184,0.55)',
+              lineHeight: 1.4,
+            }}
+          >
+            学長AIはAIによる回答です。不正確な情報が含まれる場合があります。
+          </p>
         </Flex>
       </Flex>
     </Flex>
