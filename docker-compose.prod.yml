@@ -68,14 +68,14 @@ services:
       context: frontend
       dockerfile: Dockerfile.prod
       args:
-        NEXT_PUBLIC_API_BASE_URL: https://192.168.29.16:30929
+        NEXT_PUBLIC_API_BASE_URL: https://192.168.29.19:30929
     network_mode: "host"
     image: gakucho-ai-frontend:prod
     environment:
       - NODE_ENV=production
       - PORT=30212 
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_API_BASE_URL=https://192.168.29.16:30929
+      - NEXT_PUBLIC_API_BASE_URL=https://192.168.29.19:30929
     depends_on:
       - backend
     restart: unless-stopped

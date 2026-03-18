@@ -42,8 +42,8 @@ def build_conversation_orchestrator():
     )
 
     # --- Classifier (ローカル Gemma で高速分類) ---
-    classifier_llm = GemmaLLM(
-        model_name="google/gemma-2-2b-jpn-it",
+    classifier_llm = OpenAILLM(
+        model_name="gpt-4o-mini",
         system_prompt="あなたは分類器です。ユーザー発話を候補ラベルから1つ選び、JSONのみ返してください。",
     )
     classifier = LLMDecisionClassifier(
@@ -79,8 +79,8 @@ C) 確認の予告 — 調査や検索が必要なとき、何を確認するか
 
     rag_engine = RAGModule(
         retriever=retriever,
-        llm=GemmaLLM(
-            model_name="google/gemma-2-2b-jpn-it",
+        llm=OpenAILLM(
+            model_name="gpt-4o-mini",
             system_prompt=f"{president_persona}\n\nあなたはシステム内部で情報検索と要約を担当するRAGモジュールです。与えられたコンテキストに基づいて、回答を生成してください。",
         ),
     )
