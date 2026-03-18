@@ -17,14 +17,14 @@ PromptContext = Union[str, List[dict[str, str]]]
 
 class GemmaLLM(BaseLLM):
     """
-    google/gemma-2-2b-jpn-it をローカル実行する LLM 実装。
+    google/gemma-3-27b-it をローカル実行する LLM 実装。
     - transformers の text-generation pipeline を利用
     - BaseLLM を継承して generate / stream_generate を提供
     """
 
     def __init__(
         self,
-        model_name: str = "google/gemma-2-2b-jpn-it",
+        model_name: str = "google/gemma-3-27b-it",
         system_prompt: str = """
 あなたは「簡潔に話す日本語アシスタント」です。
 
