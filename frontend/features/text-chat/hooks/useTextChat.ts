@@ -48,6 +48,10 @@ export function useTextChat(endpoint: string) {
 
   const resetChat = async () => {
     stopAllAudio()
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
     setMessages([])
     setSpeakingMessageId(null)
     setAvatarFrameSrc(null)
@@ -162,6 +166,14 @@ export function useTextChat(endpoint: string) {
     playbackTimeRef.current = 0
     currentAssistantIdRef.current = null
     setTimeout(() => (queueClearedRef.current = false), 100)
+  }
+
+  const interruptChat = () => {
+    stopAllAudio()
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
   }
 
   // ==========================================
@@ -312,6 +324,6 @@ export function useTextChat(endpoint: string) {
     resetChat,
     avatarFrameSrc,
     latestUrl,
-    interruptChat: stopAllAudio,
+    interruptChat,
   }
 }
