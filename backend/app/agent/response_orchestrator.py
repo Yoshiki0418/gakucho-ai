@@ -286,7 +286,11 @@ class ResponseOrchestrator:
 
     # --- 外部から呼ぶメイン入口 ---
     async def stream_response(
-        self, user_id: str, text: str, history: list[dict] | None = None
+        self,
+        user_id: str,
+        text: str,
+        history: list[dict] | None = None,
+        mode: str = "general",
     ) -> AsyncIterator[str]:
         """
         FastAPI / SSE / WebSocket からはこのメソッドだけ利用。
@@ -308,7 +312,7 @@ class ResponseOrchestrator:
         )
 
         # フィラーをキュー経由でストリーミング（バックグラウンド開始）
-        enable_filler = not self._is_pure_greeting(text)
+        enable_filler = (mode != "ceremony") and not self._is_pure_greeting(text)
         filler_queue = (
             await self._start_filler_producer(text, history=history)
             if enable_filler
@@ -347,6 +351,24 @@ class ResponseOrchestrator:
 
                 if route == "rag":
                     main_first_task.cancel()
+
+                    # RAG処理は時間がかかるため、フィラーが使用可能なら出力する
+                    if enable_filler and filler_queue is not None:
+                        filler_text = ""
+                        while True:
+                            chunk = await filler_queue.get()
+                            if chunk is None:
+                                break
+                            yield chunk
+                            filler_text += chunk
+                            if any(c in chunk for c in sentence_end_chars):
+                                break
+                        if filler_text.strip():
+                            elapsed = (time.perf_counter() - start) * 1000
+                            print(
+                                f"[ResponseOrchestrator] filler sent for RAG in {elapsed:.0f}ms: '{filler_text.strip()}'"
+                            )
+
                     async for chunk in self.handle_rag(user_id, text, history=history):
                         yield chunk
                     return

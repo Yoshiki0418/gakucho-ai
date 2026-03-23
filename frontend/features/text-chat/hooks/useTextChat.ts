@@ -165,7 +165,7 @@ export function useTextChat(endpoint: string) {
   }
 
   // ==========================================
-  const startChat = (userText: string) => {
+  const startChat = (userText: string, mode: string = 'general') => {
     // 新しい会話のたびにオーディオはリセット
     stopAllAudio()
     setLatestUrl(null)
@@ -183,7 +183,7 @@ export function useTextChat(endpoint: string) {
     const apiBase =
       process.env.NEXT_PUBLIC_API_BASE_URL ??
       'http://localhost:8076' // dev デフォルト
-    const fullUrl = `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}`
+    const fullUrl = `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}&mode=${mode}`
 
     console.log('[useTextChat] SSE connect to:', fullUrl)
 

@@ -10,6 +10,7 @@ export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [closedUrls, setClosedUrls] = useState<Set<string>>(new Set())
+  const [appMode, setAppMode] = useState<'general' | 'ceremony'>('general')
 
   const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc, latestUrl, interruptChat } =
     useTextChat('/api/text-chat/char-stream-orchestrator')
@@ -24,7 +25,7 @@ export default function ChatDemoPage() {
 
     setIsSending(true)
     try {
-      await startChat(message)
+      await startChat(message, appMode)
     } finally {
       setIsSending(false)
     }
@@ -39,8 +40,8 @@ export default function ChatDemoPage() {
 
 
 
-  // ユーザーが閉じたURLでなければ表示する
-  const displayUrl = latestUrl && !closedUrls.has(latestUrl) ? latestUrl : null
+  // ユーザーが閉じたURLでなければ表示する (式典モード時は非表示)
+  const displayUrl = appMode === 'general' && latestUrl && !closedUrls.has(latestUrl) ? latestUrl : null
 
   const handleCloseQRCode = () => {
     if (latestUrl) {
@@ -79,6 +80,8 @@ export default function ChatDemoPage() {
           onResetChat={resetChat}
           speakingMessageId={speakingMessageId}
           onInterrupt={interruptChat}
+          appMode={appMode}
+          onToggleMode={() => setAppMode((prev) => (prev === 'general' ? 'ceremony' : 'general'))}
         />
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <AvatarPanel frameSrc={avatarFrameSrc} />
