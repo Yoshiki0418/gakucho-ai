@@ -303,9 +303,10 @@ export function useTextChat(endpoint: string) {
   useEffect(() => {
     const triggerLipSync = async (action: 'start' | 'stop') => {
       try {
-        const url = `http://127.0.0.1:8080/${action}`
-        // no-cors を使うことでローカルの CORS エラーを回避
-        await fetch(url, { mode: 'no-cors' })
+        // Nginx および Next.js dev サーバーのプロキシを経由してアクセス (HTTPSのMixed Content対策)
+        const url = `/lip-sync/${action}`
+        // proxy 経由なので同生成元 (CORS 不要)
+        await fetch(url)
         console.log(`[LipSync] ${action}`)
       } catch (e) {
         console.error(`[LipSync] failed to ${action}:`, e)
