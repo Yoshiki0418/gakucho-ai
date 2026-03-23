@@ -82,6 +82,7 @@ export default function ChatPanel({
   const hasMessages = messages.length > 0
   const [internalMode, setInternalMode] = useState<InputMode>('text')
   const inputMode = inputModeProp ?? internalMode
+  const [voiceMode, setVoiceMode] = useState<'ptt' | 'vad'>('ptt')
 
   const handleModeChange = (mode: InputMode) => {
     if (!inputModeProp) {
@@ -261,7 +262,55 @@ export default function ChatPanel({
       >
         {/* Footerの中身... */}
         <Flex $flex_direction="column" $width="100%" $gap="10px">
-          <ModeToggle mode={inputMode} onChange={handleModeChange} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <ModeToggle mode={inputMode} onChange={handleModeChange} />
+            {inputMode === 'voice' && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: 'rgba(15,23,42,0.6)',
+                  borderRadius: 8,
+                  padding: 4,
+                  gap: 4,
+                  border: '1px solid rgba(148,163,184,0.1)',
+                }}
+              >
+                <button
+                  onClick={() => setVoiceMode('ptt')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    background: voiceMode === 'ptt' ? 'rgba(59,130,246,0.2)' : 'transparent',
+                    color: voiceMode === 'ptt' ? '#60A5FA' : '#9CA3AF',
+                    border: voiceMode === 'ptt' ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  Push-to-Talk
+                </button>
+                <button
+                  onClick={() => setVoiceMode('vad')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    background: voiceMode === 'vad' ? 'rgba(59,130,246,0.2)' : 'transparent',
+                    color: voiceMode === 'vad' ? '#60A5FA' : '#9CA3AF',
+                    border: voiceMode === 'vad' ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  自動 (VAD)
+                </button>
+              </div>
+            )}
+          </div>
           {inputMode === 'text' ? (
             <ChatInputArea
               value={inputValue}
@@ -277,6 +326,7 @@ export default function ChatPanel({
               disabled={disabled}
               isAISpeaking={Boolean(speakingMessageId)}
               onInterrupt={onInterrupt}
+              voiceMode={voiceMode}
               onTranscript={(text) => {
                 onSend(text)
               }}
