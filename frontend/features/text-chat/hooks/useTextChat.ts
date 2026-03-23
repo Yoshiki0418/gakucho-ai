@@ -48,6 +48,10 @@ export function useTextChat(endpoint: string) {
 
   const resetChat = async () => {
     stopAllAudio()
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
     setMessages([])
     setSpeakingMessageId(null)
     setAvatarFrameSrc(null)
@@ -161,11 +165,20 @@ export function useTextChat(endpoint: string) {
     audioCtxRef.current = null
     playbackTimeRef.current = 0
     currentAssistantIdRef.current = null
+    setSpeakingMessageId(null)
     setTimeout(() => (queueClearedRef.current = false), 100)
   }
 
+  const interruptChat = () => {
+    stopAllAudio()
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+  }
+
   // ==========================================
-  const startChat = (userText: string) => {
+  const startChat = (userText: string, mode: string = 'general') => {
     // 新しい会話のたびにオーディオはリセット
     stopAllAudio()
     setLatestUrl(null)
@@ -183,7 +196,7 @@ export function useTextChat(endpoint: string) {
     const apiBase =
       process.env.NEXT_PUBLIC_API_BASE_URL ??
       'http://localhost:8076' // dev デフォルト
-    const fullUrl = `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}`
+    const fullUrl = `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}&mode=${mode}`
 
     console.log('[useTextChat] SSE connect to:', fullUrl)
 
@@ -285,6 +298,33 @@ export function useTextChat(endpoint: string) {
 
   // ==========================================
 
+  const isSpeakingRef = useRef<boolean>(false)
+
+  useEffect(() => {
+    const triggerLipSync = async (action: 'start' | 'stop') => {
+      try {
+        const url = `http://127.0.0.1:8080/${action}`
+        // no-cors を使うことでローカルの CORS エラーを回避
+        await fetch(url, { mode: 'no-cors' })
+        console.log(`[LipSync] ${action}`)
+      } catch (e) {
+        console.error(`[LipSync] failed to ${action}:`, e)
+      }
+    }
+
+    if (speakingMessageId) {
+      if (!isSpeakingRef.current) {
+        isSpeakingRef.current = true
+        triggerLipSync('start')
+      }
+    } else {
+      if (isSpeakingRef.current) {
+        isSpeakingRef.current = false
+        triggerLipSync('stop')
+      }
+    }
+  }, [speakingMessageId])
+
   useEffect(() => {
     const onUserInteract = () => {
       ensureAudioReady()
@@ -312,6 +352,6 @@ export function useTextChat(endpoint: string) {
     resetChat,
     avatarFrameSrc,
     latestUrl,
-    interruptChat: stopAllAudio,
+    interruptChat,
   }
 }

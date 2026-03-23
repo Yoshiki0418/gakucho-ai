@@ -440,6 +440,7 @@ async def char_stream_orchestrator(request: Request):
     user_input = request.query_params.get("text", "こんにちは！")
     user_id = request.query_params.get("user_id", "default")
     session_id = request.query_params.get("session_id", "default")
+    mode = request.query_params.get("mode", "general")
 
     # --- 対話履歴の取得 ---
     history = []
@@ -487,6 +488,7 @@ async def char_stream_orchestrator(request: Request):
             user_id=user_id,
             text=user_input,
             history=history,
+            mode=mode,
         ):
             raw_piece = str(chunk)
             sentence_buffer += raw_piece

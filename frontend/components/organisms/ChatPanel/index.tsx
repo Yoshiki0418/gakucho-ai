@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import styled from 'styled-components'
-import { RefreshCcw } from 'lucide-react'
+import { RefreshCcw, Settings } from 'lucide-react'
 import Flex from '@/components/styles/Flex'
 import { ChatList } from '@/components/organisms/ChatList'
 import { InitialChatView } from '@/components/organisms/InitialChatView'
@@ -59,6 +59,8 @@ interface ChatPanelProps {
   onInputModeChange?: (mode: InputMode) => void
   onResetChat?: () => void
   onInterrupt?: () => void
+  appMode?: 'general' | 'ceremony'
+  onToggleMode?: () => void
 }
 
 export default function ChatPanel({
@@ -74,10 +76,13 @@ export default function ChatPanel({
   onInputModeChange,
   onResetChat,
   onInterrupt,
+  appMode = 'general',
+  onToggleMode,
 }: ChatPanelProps) {
   const hasMessages = messages.length > 0
   const [internalMode, setInternalMode] = useState<InputMode>('text')
   const inputMode = inputModeProp ?? internalMode
+  const [voiceMode, setVoiceMode] = useState<'ptt' | 'vad'>('ptt')
 
   const handleModeChange = (mode: InputMode) => {
     if (!inputModeProp) {
@@ -142,37 +147,80 @@ export default function ChatPanel({
           </span>
         </Flex>
 
-        {/* 右側：更新ボタン */}
-        <button
-          onClick={() => onResetChat?.()}
-          style={{
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(148,163,184,0.15)',
-            borderRadius: '50%',
-            width: 38,
-            height: 38,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: '0.25s ease',
-            color: '#cbd5e1',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(59,130,246,0.20)'
-            e.currentTarget.style.border = '1px solid rgba(59,130,246,0.4)'
-            e.currentTarget.style.color = '#60a5fa'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-            e.currentTarget.style.border = '1px solid rgba(148,163,184,0.15)'
-            e.currentTarget.style.color = '#cbd5e1'
-          }}
-        >
-          <RefreshCcw size={18} strokeWidth={2} />
-        </button>
+        {/* 右側：ボタン群 */}
+        <Flex $flex_direction="row" $gap="8px">
+          {onToggleMode && (
+            <button
+              onClick={() => onToggleMode()}
+              style={{
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                background: appMode === 'ceremony' ? 'rgba(59,130,246,0.20)' : 'rgba(255,255,255,0.05)',
+                border: appMode === 'ceremony' ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(148,163,184,0.15)',
+                borderRadius: '16px',
+                padding: '0 12px',
+                height: 38,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: '0.25s ease',
+                color: appMode === 'ceremony' ? '#60a5fa' : '#cbd5e1',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                gap: '6px',
+              }}
+              title={appMode === 'ceremony' ? '現在のモード：式典モード（フィラー・QR非表示）' : '現在のモード：一般モード'}
+              onMouseEnter={(e) => {
+                if (appMode !== 'ceremony') {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.border = '1px solid rgba(148,163,184,0.25)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (appMode !== 'ceremony') {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.border = '1px solid rgba(148,163,184,0.15)'
+                }
+              }}
+            >
+              <Settings size={14} />
+              {appMode === 'ceremony' ? 'モード：式典' : 'モード：一般'}
+            </button>
+          )}
+
+          <button
+            onClick={() => onResetChat?.()}
+            style={{
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(148,163,184,0.15)',
+              borderRadius: '50%',
+              width: 38,
+              height: 38,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: '0.25s ease',
+              color: '#cbd5e1',
+            }}
+            title="会話をリセット"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(59,130,246,0.20)'
+              e.currentTarget.style.border = '1px solid rgba(59,130,246,0.4)'
+              e.currentTarget.style.color = '#60a5fa'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+              e.currentTarget.style.border = '1px solid rgba(148,163,184,0.15)'
+              e.currentTarget.style.color = '#cbd5e1'
+            }}
+          >
+            <RefreshCcw size={18} strokeWidth={2} />
+          </button>
+        </Flex>
       </Flex>
 
       {/* Body: ここを ScrollableBody に変更 */}
@@ -214,7 +262,55 @@ export default function ChatPanel({
       >
         {/* Footerの中身... */}
         <Flex $flex_direction="column" $width="100%" $gap="10px">
-          <ModeToggle mode={inputMode} onChange={handleModeChange} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <ModeToggle mode={inputMode} onChange={handleModeChange} />
+            {inputMode === 'voice' && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: 'rgba(15,23,42,0.6)',
+                  borderRadius: 8,
+                  padding: 4,
+                  gap: 4,
+                  border: '1px solid rgba(148,163,184,0.1)',
+                }}
+              >
+                <button
+                  onClick={() => setVoiceMode('ptt')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    background: voiceMode === 'ptt' ? 'rgba(59,130,246,0.2)' : 'transparent',
+                    color: voiceMode === 'ptt' ? '#60A5FA' : '#9CA3AF',
+                    border: voiceMode === 'ptt' ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  Push-to-Talk
+                </button>
+                <button
+                  onClick={() => setVoiceMode('vad')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    background: voiceMode === 'vad' ? 'rgba(59,130,246,0.2)' : 'transparent',
+                    color: voiceMode === 'vad' ? '#60A5FA' : '#9CA3AF',
+                    border: voiceMode === 'vad' ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  自動 (VAD)
+                </button>
+              </div>
+            )}
+          </div>
           {inputMode === 'text' ? (
             <ChatInputArea
               value={inputValue}
@@ -230,6 +326,7 @@ export default function ChatPanel({
               disabled={disabled}
               isAISpeaking={Boolean(speakingMessageId)}
               onInterrupt={onInterrupt}
+              voiceMode={voiceMode}
               onTranscript={(text) => {
                 onSend(text)
               }}

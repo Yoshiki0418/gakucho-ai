@@ -9,6 +9,7 @@ type VoiceInputAreaProps = {
   disabled?: boolean
   isAISpeaking?: boolean
   onInterrupt?: () => void
+  voiceMode?: 'ptt' | 'vad'
 }
 
 /**
@@ -49,6 +50,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   disabled = false,
   isAISpeaking = false,
   onInterrupt,
+  voiceMode = 'ptt',
 }) => {
   const [isListening, setIsListening] = useState(false)
   const [audioLevel, setAudioLevel] = useState(0)
@@ -59,11 +61,13 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const skipAutoRestartRef = useRef(false)
+  const accumulatedTextRef = useRef('')
+  const currentTextRef = useRef('')
 
-  const propsRef = useRef({ onTranscript, isAISpeaking, onInterrupt })
+  const propsRef = useRef({ onTranscript, isAISpeaking, onInterrupt, voiceMode })
   useEffect(() => {
-    propsRef.current = { onTranscript, isAISpeaking, onInterrupt }
-  }, [onTranscript, isAISpeaking, onInterrupt])
+    propsRef.current = { onTranscript, isAISpeaking, onInterrupt, voiceMode }
+  }, [onTranscript, isAISpeaking, onInterrupt, voiceMode])
 
   // --- 音声認識の初期化 ---
   useEffect(() => {
@@ -96,17 +100,32 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
         }
       }
 
-      setPreviewText(interim || finalText)
+      const { onTranscript, isAISpeaking, onInterrupt, voiceMode: currentMode } = propsRef.current
 
-      const { onTranscript, isAISpeaking, onInterrupt } = propsRef.current
-      if ((interim || finalText) && isAISpeaking && onInterrupt) {
-        onInterrupt()
-      }
+      if (currentMode === 'vad') {
+        setPreviewText(interim || finalText)
 
-      if (finalText) {
-        skipAutoRestartRef.current = true
-        onTranscript(finalText)
-        setPreviewText('')
+        if ((interim || finalText) && isAISpeaking && onInterrupt) {
+          onInterrupt()
+        }
+
+        if (finalText) {
+          skipAutoRestartRef.current = true
+          onTranscript(finalText)
+          setPreviewText('')
+        }
+      } else {
+        // PTT (manual send) mode
+        if (finalText) {
+          accumulatedTextRef.current += finalText
+        }
+        const fullText = accumulatedTextRef.current + interim
+        setPreviewText(fullText)
+        currentTextRef.current = fullText
+
+        if ((interim || finalText) && isAISpeaking && onInterrupt) {
+          onInterrupt()
+        }
       }
     }
 
@@ -185,8 +204,17 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
 
   const toggleListening = () => {
     if (isListening) {
+      if (voiceMode === 'ptt' && currentTextRef.current.trim()) {
+        propsRef.current.onTranscript(currentTextRef.current.trim())
+      }
       stopListening()
+      accumulatedTextRef.current = ''
+      currentTextRef.current = ''
+      setPreviewText('')
     } else {
+      accumulatedTextRef.current = ''
+      currentTextRef.current = ''
+      setPreviewText('')
       if (propsRef.current.isAISpeaking && propsRef.current.onInterrupt) {
         propsRef.current.onInterrupt()
       }
@@ -227,6 +255,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
 
   return (
     <div style={{ width: '100%', padding: '4px 0' }}>
+
       <div
         style={{
           display: 'flex',
@@ -287,7 +316,9 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
                     backgroundColor: '#EF4444',
                   }}
                 />
-                <span style={{ color: '#FFFFFF' }}>録音中...</span>
+                <span style={{ color: '#FFFFFF' }}>
+                  {voiceMode === 'ptt' ? '録音中... (終了して送信)' : '録音中...'}
+                </span>
               </>
             ) : (
               <>
@@ -300,7 +331,7 @@ export const VoiceInputArea: React.FC<VoiceInputAreaProps> = ({
                   }}
                 />
                 <span style={{ color: '#FFFFFF' }}>
-                  マイクボタンを押して話しかけてください
+                  {voiceMode === 'ptt' ? 'ボタンを押して話し、もう一度押して送信' : 'マイクボタンを押して話し始めてください'}
                 </span>
               </>
             )}

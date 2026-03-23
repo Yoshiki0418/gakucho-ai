@@ -28,36 +28,36 @@ export default function FuturisticChatInputArea({
   isSending = false,
   disabled = false,
 }: ChatInputAreaProps) {
-  const [inputValue, setInputValue] = useState(value)
   const [isFocused, setIsFocused] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const lastRecognizedRef = useRef('')
 
+  // 値とハンドラーを最新に保つためのRef（onResult内で常に最新を使うため）
+  const valueRef = useRef(value)
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    valueRef.current = value
+    onChangeRef.current = onChange
+  }, [value, onChange])
+
+  const onResult = React.useCallback((text: string, isFinal: boolean) => {
+    if (isFinal && text !== lastRecognizedRef.current) {
+      lastRecognizedRef.current = text
+      const newValue = (valueRef.current + ' ' + text).trim()
+      onChangeRef.current({ target: { value: newValue } } as any)
+    }
+  }, [])
+
   const { isListening, start, stop, reset, syncExternalText } =
     useSpeechRecognition({
       continuous: true,
-      onResult: (text, isFinal) => {
-        if (isFinal && text !== lastRecognizedRef.current) {
-          lastRecognizedRef.current = text
-          setInputValue((prev) => (prev + ' ' + text).trim())
-        }
-      },
+      onResult,
       onError: (err) => console.error('SpeechRecognition Error:', err),
     })
 
-  useEffect(() => {
-    setInputValue(value)
-    syncExternalText(value)
-  }, [value])
-
-  useEffect(() => {
-    onChange({ target: { value: inputValue } } as any)
-  }, [inputValue])
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value
-    setInputValue(newValue)
-    syncExternalText(newValue)
+    onChange(e)
+    syncExternalText(e.target.value)
   }
 
   // Mic ボタンクリック
@@ -70,7 +70,7 @@ export default function FuturisticChatInputArea({
       setIsRecording(false)
     } else {
       // 開始
-      syncExternalText(inputValue)
+      syncExternalText(value)
       lastRecognizedRef.current = ''
       start()
       setIsRecording(true)
@@ -79,7 +79,7 @@ export default function FuturisticChatInputArea({
 
   // 送信（ボタン or Enter）
   const handleSend = async () => {
-    const text = inputValue.trim()
+    const text = value.trim()
     if (disabled || isSending || !text) return
 
     onSend(text)
@@ -88,7 +88,6 @@ export default function FuturisticChatInputArea({
     stop()
     reset()
     setIsRecording(false)
-    setInputValue('')
     lastRecognizedRef.current = ''
   }
 
@@ -102,7 +101,7 @@ export default function FuturisticChatInputArea({
     if (!isListening) setIsRecording(false)
   }, [isListening])
 
-  const canSend = !!inputValue.trim() && !disabled && !isSending
+  const canSend = !!value.trim() && !disabled && !isSending
 
   return (
     <form onSubmit={handleSubmit} style={{ width: '100%' }}>
@@ -136,7 +135,7 @@ export default function FuturisticChatInputArea({
         >
           {/* テキスト入力 */}
           <InputText
-            value={inputValue}
+            value={value}
             onChange={handleInputChange}
             placeholder="話しかけるか入力してください..."
             disabled={disabled}
