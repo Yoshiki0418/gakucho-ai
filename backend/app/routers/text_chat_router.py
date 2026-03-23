@@ -641,3 +641,17 @@ async def char_stream_orchestrator(request: Request):
         yield ("data: " + json.dumps({"type": "done", "message": "応答完了"}) + "\n\n")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/reset")
+async def reset_history(user_id: str = "default", session_id: str = "default"):
+    """
+    指定されたユーザーおよびセッションの対話履歴をリセット（削除）する。
+    """
+    if history_service:
+        try:
+            history_service.clear_session(user_id=user_id, session_id=session_id)
+            return {"status": "success", "message": "History reset successfully"}
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to reset history: {e}"}
+    return {"status": "ignored", "message": "HistoryService is not available"}

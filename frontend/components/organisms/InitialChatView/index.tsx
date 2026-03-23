@@ -12,7 +12,6 @@ import {
   MessageCircle,
   TrendingUp,
   Sparkles,
-  Mic,
 } from 'lucide-react'
 
 type Template = {

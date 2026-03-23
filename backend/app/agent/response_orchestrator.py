@@ -69,7 +69,7 @@ class ResponseOrchestrator:
                 チャンクを先読みしてキューに溜めておくタスク。
                 """
                 try:
-                    filler_stream = await self._generate_filler(text)
+                    filler_stream = await self._generate_filler(text, history=history)
                     async for chunk in filler_stream:
                         await filler_queue.put(chunk)
                 finally:
@@ -207,12 +207,15 @@ class ResponseOrchestrator:
         """句読点が含まれているか判定"""
         return any(p in text for p in ["、", "。", "！", "？", "\n"])
 
-    async def _generate_filler(self, text: str) -> AsyncIterator[str]:
+    async def _generate_filler(
+        self, text: str, history: list[dict] | None = None
+    ) -> AsyncIterator[str]:
         """
         フィラーをストリーミングで返すジェネレータ。
         """
 
         # 挨拶ならフィラーなし → 空のジェネレータ
+
         if self._is_pure_greeting(text):
 
             async def empty_stream():
@@ -226,15 +229,14 @@ class ResponseOrchestrator:
             try:
                 async for piece in self.filler_llm.stream_generate(
                     message=text,
-                    history=None,
+                    history=history,
                     tool_calls=None,
-                    max_tokens=30,
                     temperature=0.3,
                 ):
                     if piece:
                         yield piece
-            except Exception:
-                # エラー時は空ストリーム
+            except Exception as e:
+                print(f"[ResponseOrchestrator] _generate_filler error: {e}")
                 return
 
         return filler_stream()
@@ -255,7 +257,9 @@ class ResponseOrchestrator:
             t == g or t.startswith(g) and len(t) <= len(g) + 3 for g in greetings
         )
 
-    async def _start_filler_producer(self, text: str) -> asyncio.Queue:
+    async def _start_filler_producer(
+        self, text: str, history: list[dict] | None = None
+    ) -> asyncio.Queue:
         """フィラー LLM のストリームをキューに流すプロデューサを起動"""
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -265,14 +269,14 @@ class ResponseOrchestrator:
                     return
                 async for piece in self.filler_llm.stream_generate(
                     message=text,
-                    history=None,
+                    history=history,
                     tool_calls=None,
-                    max_tokens=30,
                     temperature=0.3,
                 ):
                     if piece:
                         await queue.put(piece)
-            except Exception:
+            except Exception as e:
+                print(f"[ResponseOrchestrator] _start_filler_producer error: {e}")
                 pass
             finally:
                 await queue.put(None)  # 終了マーカー
@@ -306,7 +310,9 @@ class ResponseOrchestrator:
         # フィラーをキュー経由でストリーミング（バックグラウンド開始）
         enable_filler = not self._is_pure_greeting(text)
         filler_queue = (
-            await self._start_filler_producer(text) if enable_filler else None
+            await self._start_filler_producer(text, history=history)
+            if enable_filler
+            else None
         )
 
         # Main を dialogue 前提で先行起動

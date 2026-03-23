@@ -46,13 +46,25 @@ export function useTextChat(endpoint: string) {
   const playbackTimeRef = useRef<number>(0)
   const queueClearedRef = useRef<boolean>(false)
 
-  const resetChat = () => {
+  const resetChat = async () => {
     stopAllAudio()
     setMessages([])
     setSpeakingMessageId(null)
     setAvatarFrameSrc(null)
     setLatestUrl(null)
     currentAssistantIdRef.current = null
+
+    // ★ バックエンドの履歴もリセットする
+    try {
+      const apiBase =
+        process.env.NEXT_PUBLIC_API_BASE_URL ??
+        'http://localhost:8076'
+      const resetUrl = `${apiBase}/api/text-chat/reset`
+      console.log('[useTextChat] Resetting history on backend:', resetUrl)
+      await fetch(resetUrl, { method: 'POST' })
+    } catch (err) {
+      console.error('[useTextChat] Failed to reset backend history:', err)
+    }
   }
 
   const ensureAudioReady = () => {

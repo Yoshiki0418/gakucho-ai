@@ -58,22 +58,27 @@ class OpenAILLM(BaseLLM):
 
         messages = self.build_context(message, self._system_prompt, history)
 
-        if tool_calls:
-            response = openai_client.chat.completions.create(
-                model=self._model_name,
-                messages=messages,
-                tools=tool_calls,
-                tool_choice="auto",
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+        kwargs = {
+            "model": self._model_name,
+            "messages": messages,
+            "temperature": temperature,
+        }
+
+        # 新しいモデル（gpt-5.2やo1等）では max_completion_tokens を使用する
+        if (
+            "gpt-5" in self._model_name
+            or "o1" in self._model_name
+            or "o3" in self._model_name
+        ):
+            kwargs["max_completion_tokens"] = max_tokens
         else:
-            response = openai_client.chat.completions.create(
-                model=self._model_name,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+            kwargs["max_tokens"] = max_tokens
+
+        if tool_calls:
+            kwargs["tools"] = tool_calls
+            kwargs["tool_choice"] = "auto"
+
+        response = openai_client.chat.completions.create(**kwargs)
 
         return response.choices[0].message.content.strip()
 
@@ -92,14 +97,25 @@ class OpenAILLM(BaseLLM):
 
         messages = self.build_context(message, self._system_prompt, history)
 
+        kwargs = {
+            "model": self._model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+
+        # 新しいモデル（gpt-5.2やo1等）では max_completion_tokens を使用する
+        if (
+            "gpt-5" in self._model_name
+            or "o1" in self._model_name
+            or "o3" in self._model_name
+        ):
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
+
         # OpenAI 非同期ストリーム
-        stream = await openai_streaming_client.chat.completions.create(
-            model=self._model_name,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stream=True,
-        )
+        stream = await openai_streaming_client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
