@@ -23,7 +23,7 @@ class LifePlanningAgent:
     def __init__(self):
         self.agent = Agent(
             name="LifePlanningAgent",
-            model="gpt-4o-mini",
+            model="gpt-5.2",
             instructions="""
                 あなたは LifePlanning ドメイン専門のエージェントです。
 

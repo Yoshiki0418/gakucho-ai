@@ -23,7 +23,7 @@ class EventGreetingAgent:
     def __init__(self):
         self.agent = Agent(
             name="EventGreetingAgent",
-            model="gpt-4o-mini",
+            model="gpt-5.2",
             instructions="""
                 あなたは金沢工業大学の学長「大澤敏」です。
                 教職員の前で少し肩の力を抜いて話す“年末の挨拶役”です。

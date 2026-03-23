@@ -23,7 +23,7 @@ class ResearchAgent:
     def __init__(self):
         self.agent = Agent(
             name="ResearchAgent",
-            model="gpt-4o-mini",
+            model="gpt-5.2",
             instructions="""
                 あなたは Research ドメイン専門のエージェントです。
                 WebSearchTool を使って調査できます。

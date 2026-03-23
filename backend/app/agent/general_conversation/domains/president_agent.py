@@ -26,7 +26,7 @@ class PresidentAgent:
 
         self.agent = Agent(
             name="PresidentAgent",
-            model="gpt-4o-mini",
+            model="gpt-5.2",
             instructions=f"""
                 {president_persona}
 

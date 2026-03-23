@@ -33,7 +33,7 @@ def create_tts(provider: str, model_dir: str):
 
 def load_models_from_env() -> Tuple[object, object]:
     llm_provider = os.getenv("LLM_PROVIDER", "openai")
-    llm_model_name = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
+    llm_model_name = os.getenv("LLM_MODEL_NAME", "gpt-5.2")
     tts_provider = os.getenv("TTS_PROVIDER", "style-bert-vits2")
 
     prompt_path = os.getenv(

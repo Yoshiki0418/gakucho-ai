@@ -2,7 +2,6 @@ import os
 
 from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.agent.general_conversation.domains import (
-    EventGreetingAgent,
     LifePlanningAgent,
     LocationAgent,
     PresidentAgent,
@@ -31,14 +30,12 @@ def build_conversation_orchestrator():
     life_planning_agent = LifePlanningAgent()
     location_agent = LocationAgent()
     president_agent = PresidentAgent()
-    event_greeting_agent = EventGreetingAgent()
 
     gc_agent = GeneralConversationAgent(
         research_agent.agent,
         life_planning_agent.agent,
         location_agent.agent,
         president_agent.agent,
-        event_greeting_agent.agent,
     )
 
     # --- Classifier (ローカル Gemma で高速分類) ---

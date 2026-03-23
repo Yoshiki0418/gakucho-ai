@@ -24,7 +24,7 @@ class LocationAgent:
     def __init__(self):
         self.agent = Agent(
             name="LocationAgent",
-            model="gpt-4o-mini",
+            model="gpt-5.2",
             instructions="""
                 あなたは Location ドメイン専門のエージェントです。
 
