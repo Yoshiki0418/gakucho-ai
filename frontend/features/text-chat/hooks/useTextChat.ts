@@ -165,6 +165,7 @@ export function useTextChat(endpoint: string) {
     audioCtxRef.current = null
     playbackTimeRef.current = 0
     currentAssistantIdRef.current = null
+    setSpeakingMessageId(null)
     setTimeout(() => (queueClearedRef.current = false), 100)
   }
 
@@ -296,6 +297,33 @@ export function useTextChat(endpoint: string) {
   }
 
   // ==========================================
+
+  const isSpeakingRef = useRef<boolean>(false)
+
+  useEffect(() => {
+    const triggerLipSync = async (action: 'start' | 'stop') => {
+      try {
+        const url = `http://127.0.0.1:8080/${action}`
+        // no-cors を使うことでローカルの CORS エラーを回避
+        await fetch(url, { mode: 'no-cors' })
+        console.log(`[LipSync] ${action}`)
+      } catch (e) {
+        console.error(`[LipSync] failed to ${action}:`, e)
+      }
+    }
+
+    if (speakingMessageId) {
+      if (!isSpeakingRef.current) {
+        isSpeakingRef.current = true
+        triggerLipSync('start')
+      }
+    } else {
+      if (isSpeakingRef.current) {
+        isSpeakingRef.current = false
+        triggerLipSync('stop')
+      }
+    }
+  }, [speakingMessageId])
 
   useEffect(() => {
     const onUserInteract = () => {
