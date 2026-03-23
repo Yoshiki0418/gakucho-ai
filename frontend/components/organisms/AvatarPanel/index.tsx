@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 
 /** Pixel Streaming サーバーの URL */
-const PIXEL_STREAMING_URL = 'http://127.0.0.1:80'
+const PIXEL_STREAMING_URL = '/ue-stream/'
 
 type AvatarPanelProps = {
   frameSrc: string | null

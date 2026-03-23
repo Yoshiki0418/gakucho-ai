@@ -5,3 +5,5 @@ nginx/certs/
 *.key
 *.crt
 *.pem
+
+nginx_*.txt

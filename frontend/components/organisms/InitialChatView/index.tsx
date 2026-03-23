@@ -59,12 +59,6 @@ const TEMPLATES: Template[] = [
     title: '最近のAI技術のトレンドを教えて！',
     description: '最新のトレンドを調査します。',
   },
-  {
-    id: 'speech',
-    icon: Mic,
-    title: '教職員向けに心温まる忘年会の挨拶を話してください。',
-    description: '心温まる忘年会の挨拶を担当します。',
-  },
 ]
 
 interface InitialChatViewProps {
