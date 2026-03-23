@@ -207,15 +207,16 @@ class ResponseOrchestrator:
         """句読点が含まれているか判定"""
         return any(p in text for p in ["、", "。", "！", "？", "\n"])
 
-    async def _generate_filler(self, text: str, history: list[dict] | None = None) -> AsyncIterator[str]:
+    async def _generate_filler(
+        self, text: str, history: list[dict] | None = None
+    ) -> AsyncIterator[str]:
         """
         フィラーをストリーミングで返すジェネレータ。
         """
 
         # 挨拶ならフィラーなし → 空のジェネレータ
-        
-        if self._is_pure_greeting(text):
 
+        if self._is_pure_greeting(text):
 
             async def empty_stream():
                 if False:
@@ -256,7 +257,9 @@ class ResponseOrchestrator:
             t == g or t.startswith(g) and len(t) <= len(g) + 3 for g in greetings
         )
 
-    async def _start_filler_producer(self, text: str, history: list[dict] | None = None) -> asyncio.Queue:
+    async def _start_filler_producer(
+        self, text: str, history: list[dict] | None = None
+    ) -> asyncio.Queue:
         """フィラー LLM のストリームをキューに流すプロデューサを起動"""
         queue: asyncio.Queue = asyncio.Queue()
 

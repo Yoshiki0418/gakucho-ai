@@ -63,9 +63,13 @@ class OpenAILLM(BaseLLM):
             "messages": messages,
             "temperature": temperature,
         }
-        
+
         # 新しいモデル（gpt-5.2やo1等）では max_completion_tokens を使用する
-        if "gpt-5" in self._model_name or "o1" in self._model_name or "o3" in self._model_name:
+        if (
+            "gpt-5" in self._model_name
+            or "o1" in self._model_name
+            or "o3" in self._model_name
+        ):
             kwargs["max_completion_tokens"] = max_tokens
         else:
             kwargs["max_tokens"] = max_tokens
@@ -73,7 +77,7 @@ class OpenAILLM(BaseLLM):
         if tool_calls:
             kwargs["tools"] = tool_calls
             kwargs["tool_choice"] = "auto"
-            
+
         response = openai_client.chat.completions.create(**kwargs)
 
         return response.choices[0].message.content.strip()
@@ -101,7 +105,11 @@ class OpenAILLM(BaseLLM):
         }
 
         # 新しいモデル（gpt-5.2やo1等）では max_completion_tokens を使用する
-        if "gpt-5" in self._model_name or "o1" in self._model_name or "o3" in self._model_name:
+        if (
+            "gpt-5" in self._model_name
+            or "o1" in self._model_name
+            or "o3" in self._model_name
+        ):
             kwargs["max_completion_tokens"] = max_tokens
         else:
             kwargs["max_tokens"] = max_tokens
