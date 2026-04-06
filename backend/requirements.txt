@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+torch
 numpy==1.26.4
 soundfile
 openai-whisper

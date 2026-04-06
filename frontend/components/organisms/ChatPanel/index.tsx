@@ -61,6 +61,7 @@ interface ChatPanelProps {
   onInterrupt?: () => void
   appMode?: 'general' | 'ceremony'
   onToggleMode?: () => void
+  width?: number | string
 }
 
 export default function ChatPanel({
@@ -78,6 +79,7 @@ export default function ChatPanel({
   onInterrupt,
   appMode = 'general',
   onToggleMode,
+  width = '35%',
 }: ChatPanelProps) {
   const hasMessages = messages.length > 0
   const [internalMode, setInternalMode] = useState<InputMode>('text')
@@ -104,7 +106,7 @@ export default function ChatPanel({
       $flex_direction="column"
       $backgroundColor="#020617"
       $borderRadius="16px"
-      $width="35%"
+      $width={typeof width === 'number' ? `${width}px` : width}
       $height="100%"
       $padding="0"
       style={{

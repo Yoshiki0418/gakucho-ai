@@ -46,9 +46,15 @@ services:
     image: gakucho-ai-backend:prod
     env_file:
       - ./backend/.env
-    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_VISIBLE_DEVICES=1
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - ENV=prod
       - DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}

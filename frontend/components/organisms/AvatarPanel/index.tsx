@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 /** Pixel Streaming サーバーの URL */
 const PIXEL_STREAMING_URL = '/ue-stream/'
@@ -17,6 +17,27 @@ export const AvatarPanel: React.FC<AvatarPanelProps> = ({
 }) => {
   const [isLoaded, setIsLoaded] = useState(false)
   const isSpeaking = frameSrc !== null
+
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [hasStarted, setHasStarted] = useState(false)
+
+  // 最初の「CLICK TO START」クリックを検知するための監視処理
+  useEffect(() => {
+    const checkFocus = () => {
+      // ユーザーが iframe をクリックしてフォーカスが移った場合
+      if (document.activeElement === iframeRef.current) {
+        setHasStarted(true)
+      }
+    }
+
+    const interval = setInterval(checkFocus, 200)
+    window.addEventListener('blur', checkFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('blur', checkFocus)
+    }
+  }, [])
 
   return (
     <div
@@ -61,6 +82,7 @@ export const AvatarPanel: React.FC<AvatarPanelProps> = ({
 
       {/* UE5 Pixel Streaming iframe */}
       <iframe
+        ref={iframeRef}
         src={streamUrl}
         title="学長 3D アバター (Pixel Streaming)"
         allow="autoplay; fullscreen; microphone; camera"
@@ -71,9 +93,24 @@ export const AvatarPanel: React.FC<AvatarPanelProps> = ({
           display: 'block',
           opacity: isLoaded ? 1 : 0,
           transition: 'opacity 0.4s ease',
+          pointerEvents: hasStarted ? 'none' : 'auto', // 最初のクリック以降は無効化
         }}
         onLoad={() => setIsLoaded(true)}
       />
+
+      {/* 画面操作（ドラッグやクリックでの視点移動）を防ぐための透明なオーバーレイ */}
+      {/* 初回の「CLICK TO START」を押した後だけ有効になる */}
+      {hasStarted && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            backgroundColor: 'transparent',
+            cursor: 'default',
+          }}
+        />
+      )}
 
       {/* 右上ステータスバッジ */}
       <div

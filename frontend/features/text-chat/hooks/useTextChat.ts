@@ -220,13 +220,13 @@ export function useTextChat(endpoint: string) {
               // 🎯 新しい assistant メッセージ開始
               const id = crypto.randomUUID()
               currentAssistantIdRef.current = id
-              setSpeakingMessageId(id)
+              // 音声再生時にセットするためここでは呼ばない
               return [...prev, { id, text: chunk, role: 'assistant' }]
             } else {
               // 直近の assistant メッセージに追記
               const id = currentAssistantIdRef.current ?? last.id
               currentAssistantIdRef.current = id
-              setSpeakingMessageId(id)
+              // 音声再生時にセットするためここでは呼ばない
 
               let updated = last.text + chunk
               if (/[。！？!?]$/.test(updated)) updated += '\n\n'

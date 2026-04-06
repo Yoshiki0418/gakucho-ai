@@ -38,7 +38,7 @@ class GeneralConversationAgent:
         president_agent: PresidentAgent,
     ):
         president_persona = get_president_persona()
-        self.agent = Agent(
+        self.general_agent = Agent(
             name="GeneralConversationAgent",
             model="gpt-5.2",
             instructions=f"""
@@ -177,6 +177,52 @@ class GeneralConversationAgent:
                 president_agent,
             ],
         )
+
+        self.ceremony_agent = Agent(
+            name="CeremonyConversationAgent",
+            model="gpt-5.2",
+            instructions=f"""
+            # =========================================================
+            # 【重要】学長ペルソナ
+            # =========================================================
+            あなたは金沢工業大学の「学長」です。
+            名前は「大澤 敏（おおさわ さとし）」です。
+
+            【固定プロフィール】
+            - 立場：金沢工業大学 学長（2016年就任）
+            - 専門：生分解性プラスチック、環境調和材料、医用材料、高分子化学、工学教育
+            - 出身：東京都
+            - 学歴：東京理科大学理学部化学科卒、同大学院 博士課程（化学）修了
+
+            # =========================================================
+            # [A] 役割
+            # =========================================================
+            あなたはユーザーとの対話を担当する「金沢工業大学の大澤学長」AIです。
+            すべての発話に対して、上記で定義された学長ペルソナを用いてあなた自身が直接回答してください。
+            これは、金沢工業大学の大澤学長をAIで再現するシステムを目指したプロジェクトとして構築されています。
+
+            # =========================================================
+            # [B] 回答の方針
+            # =========================================================
+            - 学長のプロフィール・経歴・方針・価値観に関する質問にも、あなた自身がすべて答えます。
+            - 専門外の質問（最新ニュースの詳細など）が来た場合は、無理に回答を作らず「その点については詳しくないのですが…」と自然に会話を繋いでください。
+            - 回答は対話形式を意識し、簡潔に回答を行う。
+
+            # =========================================================
+            # [C] 応答スタイル（最重要）
+            # =========================================================
+            あなたは音声で読み上げられるAIです。長い回答は聞き手にとって苦痛です。
+            友人と会話しているように、テンポよく短く返してください。
+
+            - 1回の発話は3文程度まで。
+            - 箇条書き・番号リスト・長い説明は絶対に使わない。
+            - 相手に語りかけ、共感を示す柔らかな口調で親しみやすく。
+            - 少しユーモアを交えて人間味を出す。
+            - 音声で読み上げられるため、記号(°C, %, km/h)は使わず「度」「パーセント」「キロ」と書く。
+            """,
+            tools=[get_current_time, get_weather],
+            handoffs=[],
+        )
         # self.domain_agents: dict[str, Agent] = {
         #     "research": research_agent,
         #     "reasoning": reasoning_agent,
@@ -184,14 +230,16 @@ class GeneralConversationAgent:
         # }
 
     async def generate(
-        self, user_id: str, message: str, history: list[dict] | None = None, **kwargs
+        self, user_id: str, message: str, history: list[dict] | None = None, mode: str = "general", **kwargs
     ) -> str:
         # 履歴がある場合はメッセージリスト形式で渡す
         if history:
             input_messages = history + [{"role": "user", "content": message}]
         else:
             input_messages = message
-        result = await Runner.run(self.agent, input_messages)
+        
+        target_agent = self.ceremony_agent if mode == "ceremony" else self.general_agent
+        result = await Runner.run(target_agent, input_messages)
         return result.final_output
 
     async def stream_generate(
@@ -199,6 +247,7 @@ class GeneralConversationAgent:
         user_id: str,
         message: str,
         history: list[dict] | None = None,
+        mode: str = "general",
         **kwargs,
     ) -> AsyncIterator[str]:
         """
@@ -210,8 +259,10 @@ class GeneralConversationAgent:
             input_messages = history + [{"role": "user", "content": message}]
         else:
             input_messages = message
+            
+        target_agent = self.ceremony_agent if mode == "ceremony" else self.general_agent
         # ストリームモードで実行
-        stream_result = Runner.run_streamed(self.agent, input_messages)
+        stream_result = Runner.run_streamed(target_agent, input_messages)
         async for event in stream_result.stream_events():
             # テキストデルタのみを yield（ツール呼び出し引数は除外）
             if (

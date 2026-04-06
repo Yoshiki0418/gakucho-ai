@@ -111,7 +111,7 @@ class StyleBertVITS2_TTS(BaseTTS):
             sdp_ratio=DEFAULT_SDP_RATIO,
             noise=DEFAULT_NOISE,
             noise_w=DEFAULT_NOISEW,
-            length=DEFAULT_LENGTH,
+            length=1.1,
         )
         return sr, audio
 

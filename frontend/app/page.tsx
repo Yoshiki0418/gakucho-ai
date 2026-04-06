@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import ChatPanel from '@/components/organisms/ChatPanel'
 import { useTextChat } from '@/features/text-chat/hooks/useTextChat'
 import { AvatarPanel } from '@/components/organisms/AvatarPanel'
@@ -11,6 +11,34 @@ export default function ChatDemoPage() {
   const [isSending, setIsSending] = useState(false)
   const [closedUrls, setClosedUrls] = useState<Set<string>>(new Set())
   const [appMode, setAppMode] = useState<'general' | 'ceremony'>('general')
+
+  const [chatWidth, setChatWidth] = useState<number | string>('35%')
+  const [isResizing, setIsResizing] = useState(false)
+
+  useEffect(() => {
+    setChatWidth(window.innerWidth * 0.35)
+  }, [])
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Limit minimum to 320px and maximum to 80% inner width
+      const newWidth = Math.max(320, Math.min(e.clientX, window.innerWidth * 0.8))
+      setChatWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing])
 
   const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc, latestUrl, interruptChat } =
     useTextChat('/api/text-chat/char-stream-orchestrator')
@@ -58,6 +86,8 @@ export default function ChatDemoPage() {
         height: '100vh',
         backgroundColor: '#000',
         overflow: 'hidden',
+        cursor: isResizing ? 'col-resize' : 'auto',
+        userSelect: isResizing ? 'none' : 'auto',
       }}
     >
       <section
@@ -82,7 +112,35 @@ export default function ChatDemoPage() {
           onInterrupt={interruptChat}
           appMode={appMode}
           onToggleMode={() => setAppMode((prev) => (prev === 'general' ? 'ceremony' : 'general'))}
+          width={chatWidth}
         />
+
+        {/* リサイズ用ハンドル */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault()
+            setIsResizing(true)
+          }}
+          style={{
+            width: '12px',
+            cursor: 'col-resize',
+            backgroundColor: isResizing ? 'rgba(59, 130, 246, 0.4)' : 'transparent',
+            zIndex: 50,
+            transition: 'background-color 0.2s',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onMouseEnter={(e) => {
+            if (!isResizing) e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)'
+          }}
+          onMouseLeave={(e) => {
+            if (!isResizing) e.currentTarget.style.backgroundColor = 'transparent'
+          }}
+        >
+          <div style={{ width: '2px', height: '30px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '1px' }} />
+        </div>
+
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <AvatarPanel frameSrc={avatarFrameSrc} />
           <QRCodeDisplay url={displayUrl} onClose={handleCloseQRCode} />

@@ -35,7 +35,7 @@ class ResponseOrchestrator:
 
     # --- 日常対話 + フィラー ---
     async def handle_daily_with_filler(
-        self, user_id: str, text: str, history: list[dict] | None = None
+        self, user_id: str, text: str, history: list[dict] | None = None, mode: str = "general"
     ) -> AsyncIterator[str]:
         """
         - 本応答(OpenAI Agent SDK)をストリーミング
@@ -51,6 +51,7 @@ class ResponseOrchestrator:
             user_id=user_id,
             message=text,
             history=history,
+            mode=mode,
         ).__aiter__()
 
         # --- 挨拶だけならフィラー不要 ---
@@ -324,6 +325,7 @@ class ResponseOrchestrator:
             user_id=user_id,
             message=text,
             history=history,
+            mode=mode,
         ).__aiter__()
         main_first_task = asyncio.create_task(main_iter.__anext__())
 
