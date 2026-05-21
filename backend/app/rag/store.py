@@ -16,7 +16,13 @@ class RAGStore:
         self.conn = psycopg2.connect(db_url)
         self.conn.autocommit = True
         self.model = SentenceTransformer("cl-nagoya/ruri-v3-310m")
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # 環境変数 RAG_EMBED_DEVICE で device を強制できる（"cpu" / "cuda"）。
+        # GPU で NaN が出るケースを避けたいときは "cpu" を指定する。
+        forced = os.environ.get("RAG_EMBED_DEVICE")
+        if forced:
+            self.device = forced
+        else:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ==========================================================
     # 内部ユーティリティ: CSV の自動エンコーディング読み込み
@@ -98,9 +104,18 @@ class RAGStore:
         embeddings = self.model.encode(docs, convert_to_tensor=True, device=self.device)
         embeddings = F.normalize(embeddings, p=2, dim=1)
 
+        # NaN/Inf を含む embedding が出た場合は pgvector に拒否されるため弾く
+        nan_mask = torch.isnan(embeddings).any(dim=1) | torch.isinf(embeddings).any(dim=1)
+        n_nan = int(nan_mask.sum().item())
+        if n_nan > 0:
+            print(f"⚠️ {n_nan} 件の embedding に NaN/Inf が含まれていたためスキップします。")
+
         # ★ autocommit=True 前提なので connection の with はやめる
         with self.conn.cursor() as cur:
-            for context, emb, source_url in zip(contexts, embeddings, source_urls):
+            for idx, (context, emb, source_url) in enumerate(zip(contexts, embeddings, source_urls)):
+                if nan_mask[idx].item():
+                    skipped += 1
+                    continue
                 emb_list = emb.cpu().tolist()
                 source = source_name or os.path.basename(csv_path)
 

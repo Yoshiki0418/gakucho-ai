@@ -23,12 +23,21 @@ def main():
     # backend/.env から環境変数を読み込む（DB_URL等）
     load_dotenv()
 
-    # プロジェクト直下の data/rag_documents.csv を絶対パスで指定
+    # プロジェクト直下の data/ にある対象CSVを絶対パスで指定
     project_root = os.path.dirname(backend_dir)
-    csv_path = os.path.join(project_root, "data", "rag_documents.csv")
+    data_dir = os.path.join(project_root, "data")
+    csv_files = [
+        "rag_documents.csv",
+        "kit_main_rag_data.csv",
+        "toranomon_rag_data.csv",
+    ]
+    csv_paths = [os.path.join(data_dir, name) for name in csv_files]
 
-    if not os.path.exists(csv_path):
-        print(f"❌ エラー: 指定されたCSVファイルが見つかりません: {csv_path}")
+    missing = [p for p in csv_paths if not os.path.exists(p)]
+    if missing:
+        print("❌ エラー: 以下のCSVファイルが見つかりません:")
+        for p in missing:
+            print(f"  - {p}")
         sys.exit(1)
 
     db_url = os.environ.get("DB_URL")
@@ -40,18 +49,30 @@ def main():
     # RAGStoreの初期化
     store = RAGStore(db_url)
 
+    totals = {"inserted": 0, "updated": 0, "skipped": 0, "skipped_index_limit": 0}
+
     try:
-        print(f"📦 '{csv_path}' の読み込みとベクトル化(Embedding)を開始します。")
-        print("※データ件数によってはGPU/CPUで数分〜十几分かかる場合があります...")
+        for idx, csv_path in enumerate(csv_paths, start=1):
+            print(f"\n=========================================")
+            print(f"[{idx}/{len(csv_paths)}] 📦 '{csv_path}' の読み込みとベクトル化(Embedding)を開始します。")
+            print("※データ件数によってはGPU/CPUで数分〜十数分かかる場合があります...")
 
-        # 実際にDBにインサートする処理（store.pyのinsert_from_csvを利用）
-        result = store.insert_from_csv(csv_path)
+            result = store.insert_from_csv(csv_path)
 
-        print("\n✨ === データの登録が完了しました！ === ✨")
-        print(f"📥 新規追加: {result.get('inserted', 0)} 件")
-        print(f"🔄 更新: {result.get('updated', 0)} 件")
+            for k in totals:
+                totals[k] += result.get(k, 0)
+
+            print(f"  📥 新規追加: {result.get('inserted', 0)} 件")
+            print(f"  🔄 更新: {result.get('updated', 0)} 件")
+            print(
+                f"  ⏭️ スキップ: {result.get('skipped', 0)} 件 / サイズ超過: {result.get('skipped_index_limit', 0)} 件"
+            )
+
+        print("\n✨ === 全CSVの登録が完了しました！ === ✨")
+        print(f"📥 新規追加 合計: {totals['inserted']} 件")
+        print(f"🔄 更新 合計: {totals['updated']} 件")
         print(
-            f"⏭️ スキップ: {result.get('skipped', 0)} 件 / サイズ超過: {result.get('skipped_index_limit', 0)} 件"
+            f"⏭️ スキップ 合計: {totals['skipped']} 件 / サイズ超過: {totals['skipped_index_limit']} 件"
         )
 
     except Exception as e:

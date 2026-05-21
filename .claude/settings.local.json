@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import sentence_transformers; import psycopg2; import torch; print\\('deps ok'\\)\")"
+    ]
+  }
+}
