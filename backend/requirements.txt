@@ -1,10 +1,12 @@
 fastapi
 uvicorn[standard]
-torch
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.5.1+cu121
+torchaudio==2.5.1+cu121
 numpy==1.26.4
 soundfile
 openai-whisper
-transformers
+transformers==4.49.0
 openai
 tiktoken
 git-lfs

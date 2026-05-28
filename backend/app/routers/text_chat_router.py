@@ -1,4 +1,6 @@
 import asyncio
+import datetime
+import os
 
 # import base64
 # import io
@@ -434,6 +436,22 @@ def _sanitize_for_speech(text: str) -> str:
     return text
 
 
+# --- ベンチマークログ保存用ディレクトリ ---
+_BENCHMARK_LOG_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "benchmark_logs",
+)
+
+
+def _append_benchmark_log(entry: dict) -> None:
+    """ベンチマーク結果を JSONL ファイルに1行追記する。"""
+    os.makedirs(_BENCHMARK_LOG_DIR, exist_ok=True)
+    today = datetime.date.today().isoformat()
+    filepath = os.path.join(_BENCHMARK_LOG_DIR, f"benchmark_{today}.jsonl")
+    with open(filepath, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
 @router.get("/char-stream-orchestrator")
 async def char_stream_orchestrator(request: Request):
     t0 = time.perf_counter()  # === 計測開始 ===
@@ -441,6 +459,16 @@ async def char_stream_orchestrator(request: Request):
     user_id = request.query_params.get("user_id", "default")
     session_id = request.query_params.get("session_id", "default")
     mode = request.query_params.get("mode", "general")
+    filler_enabled_str = request.query_params.get("filler_enabled", "true").lower()
+    filler_mode_str = request.query_params.get("filler_mode", None)
+    
+    if filler_mode_str:
+        filler_mode = filler_mode_str.lower()
+    else:
+        # 後方互換性
+        filler_mode = "dynamic" if filler_enabled_str == "true" else "off"
+        
+    benchmark_mode = request.query_params.get("benchmark_mode", "false").lower() == "true"
 
     # --- 対話履歴の取得 ---
     history = []
@@ -483,20 +511,27 @@ async def char_stream_orchestrator(request: Request):
         full_response = ""  # アシスタント応答全文を蓄積
         first_text_logged = False
         first_audio_logged = False
+        ttft_ms = None
+        ttfa_ms = None
+        first_sentence_ms = None
+        tts_duration_ms = None
+        timing_data = {}  # Orchestrator が計測結果を書き込む
 
         async for chunk in conversation_orchestrator.stream_response(
             user_id=user_id,
             text=user_input,
             history=history,
             mode=mode,
+            filler_mode=filler_mode,
+            timing_data=timing_data,
         ):
             raw_piece = str(chunk)
             sentence_buffer += raw_piece
 
             # --- 初回テキストチャンクの計測 ---
             if not first_text_logged:
-                ttft = (time.perf_counter() - t0) * 1000
-                print(f"[TIMING] TTFT (Time To First Text): {ttft:.0f}ms")
+                ttft_ms = (time.perf_counter() - t0) * 1000
+                print(f"[TIMING] TTFT (Time To First Text): {ttft_ms:.0f}ms")
                 first_text_logged = True
 
             # 文の終端を検出したら、完成した文をサニタイズして出力
@@ -540,11 +575,17 @@ async def char_stream_orchestrator(request: Request):
                     + "\n\n"
                 )
 
+                if first_sentence_ms is None:
+                    first_sentence_ms = (time.perf_counter() - t0) * 1000
+
                 # 並列で音声生成
+                tts_start = time.perf_counter()
                 audio_b64 = await asyncio.to_thread(
                     _tts.synthesize_to_base64,
                     current_sentence,
                 )
+                if tts_duration_ms is None:
+                    tts_duration_ms = (time.perf_counter() - tts_start) * 1000
 
                 yield (
                     "data: "
@@ -560,8 +601,8 @@ async def char_stream_orchestrator(request: Request):
 
                 # --- 初回音声チャンクの計測 ---
                 if not first_audio_logged:
-                    ttfa = (time.perf_counter() - t0) * 1000
-                    print(f"[TIMING] TTFA (Time To First Audio): {ttfa:.0f}ms")
+                    ttfa_ms = (time.perf_counter() - t0) * 1000
+                    print(f"[TIMING] TTFA (Time To First Audio): {ttfa_ms:.0f}ms")
                     first_audio_logged = True
 
                 sentence_buffer = ""
@@ -629,16 +670,47 @@ async def char_stream_orchestrator(request: Request):
         # --- タイミング情報の送信 ---
         total_ms = (time.perf_counter() - t0) * 1000
         print(f"[TIMING] Total response time: {total_ms:.0f}ms")
+
+        # 詳細タイミングペイロード
+        timing_payload = {
+            "type": "timing",
+            "total_ms": round(total_ms),
+            "ttft_ms": round(ttft_ms) if ttft_ms is not None else None,
+            "ttfa_ms": round(ttfa_ms) if ttfa_ms is not None else None,
+            "ttmr_ms": round(timing_data.get("ttmr_ms")) if timing_data.get("ttmr_ms") is not None else None,
+            "first_sentence_ms": round(first_sentence_ms) if first_sentence_ms is not None else None,
+            "tts_duration_ms": round(tts_duration_ms) if tts_duration_ms is not None else None,
+            "filler_mode": timing_data.get("filler_mode"),
+            "filler_fired": timing_data.get("filler_fired", False),
+            "filler_text": timing_data.get("filler_text", ""),
+            "filler_ttfb_ms": round(timing_data.get("filler_ttfb_ms")) if timing_data.get("filler_ttfb_ms") is not None else None,
+            "filler_duration_ms": round(timing_data.get("filler_duration_ms")) if timing_data.get("filler_duration_ms") is not None else None,
+            "classifier_ms": round(timing_data.get("classifier_ms")) if timing_data.get("classifier_ms") is not None else None,
+            "route": timing_data.get("route"),
+            "main_responded_in_time": timing_data.get("main_responded_in_time"),
+        }
         yield (
             "data: "
-            + json.dumps(
-                {
-                    "type": "timing",
-                    "total_ms": round(total_ms),
-                }
-            )
+            + json.dumps(timing_payload)
             + "\n\n"
         )
+
+        # --- ベンチマークモード: JSONL にログ追記 ---
+        if benchmark_mode:
+            log_entry = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "user_id": user_id,
+                "session_id": session_id,
+                "query": user_input,
+                "mode": mode,
+                "response_text": full_response.strip(),
+                **timing_payload,
+            }
+            try:
+                _append_benchmark_log(log_entry)
+                print(f"[BENCHMARK] Log saved for query: '{user_input[:30]}...'")
+            except Exception as e:
+                print(f"[BENCHMARK] Failed to save log: {e}")
 
         yield ("data: " + json.dumps({"type": "done", "message": "応答完了"}) + "\n\n")
 

@@ -285,6 +285,38 @@ class ResponseOrchestrator:
         asyncio.create_task(producer())
         return queue
 
+    async def _start_static_filler_producer(self, text: str) -> asyncio.Queue:
+        """固定フィラー（ベースライン比較用）をキューに流すプロデューサを起動"""
+        import random
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def producer():
+            try:
+                if self._is_pure_greeting(text):
+                    return
+                # 固定フィラーの候補
+                static_fillers = [
+                    "少々お待ちください。",
+                    "確認いたしますね。",
+                    "えーと、そうですね…",
+                    "お調べしますので、少しお待ちください。"
+                ]
+                chosen = random.choice(static_fillers)
+                
+                # ストリーミングを模倣するために数文字ずつ出力
+                chunk_size = 2
+                for i in range(0, len(chosen), chunk_size):
+                    await queue.put(chosen[i:i+chunk_size])
+                    await asyncio.sleep(0.05) # 少しだけディレイを入れて自然に
+            except Exception as e:
+                print(f"[ResponseOrchestrator] _start_static_filler_producer error: {e}")
+                pass
+            finally:
+                await queue.put(None)  # 終了マーカー
+
+        asyncio.create_task(producer())
+        return queue
+
     # --- 外部から呼ぶメイン入口 ---
     async def stream_response(
         self,
@@ -292,6 +324,8 @@ class ResponseOrchestrator:
         text: str,
         history: list[dict] | None = None,
         mode: str = "general",
+        filler_mode: str = "dynamic",
+        timing_data: dict | None = None,
     ) -> AsyncIterator[str]:
         """
         FastAPI / SSE / WebSocket からはこのメソッドだけ利用。
@@ -301,9 +335,28 @@ class ResponseOrchestrator:
         - Main の TTFB が timeout 以内なら → フィラーなしで Main を流す
         - Main が遅ければ → フィラーをストリーミングで即座に出力
         - フィラー出力後に Classifier 結果をチェックし RAG/dialogue を判定
+
+        Args:
+            filler_mode: "dynamic" (提案手法), "static" (固定音声比較用), "off" (フィラー無効化)
+            timing_data: 計測結果を格納する辞書。呼び出し側が空の dict を渡すと
+                         各種タイミング情報が書き込まれる。
         """
         start = time.perf_counter()
         sentence_end_chars = "。.!?！？"
+
+        # --- タイミング計測の初期化 ---
+        _td = timing_data if timing_data is not None else {}
+        _td.update({
+            "filler_mode": filler_mode,
+            "filler_fired": False,
+            "filler_text": "",
+            "filler_ttfb_ms": None,
+            "filler_duration_ms": None,
+            "ttmr_ms": None,
+            "classifier_ms": None,
+            "route": None,
+            "main_responded_in_time": None,
+        })
 
         # =============================
         # 3つ同時起動
@@ -313,12 +366,13 @@ class ResponseOrchestrator:
         )
 
         # フィラーをキュー経由でストリーミング（バックグラウンド開始）
-        enable_filler = (mode != "ceremony") and not self._is_pure_greeting(text)
-        filler_queue = (
-            await self._start_filler_producer(text, history=history)
-            if enable_filler
-            else None
-        )
+        enable_filler = (filler_mode != "off") and (mode != "ceremony") and not self._is_pure_greeting(text)
+        filler_queue = None
+        if enable_filler:
+            if filler_mode == "static":
+                filler_queue = await self._start_static_filler_producer(text)
+            else:
+                filler_queue = await self._start_filler_producer(text, history=history)
 
         # Main を dialogue 前提で先行起動
         main_iter = self.daily_agent.stream_generate(
@@ -341,12 +395,16 @@ class ResponseOrchestrator:
             if main_first_task in done:
                 # --- Main が時間内に応答 → フィラー不要 ---
                 elapsed = (time.perf_counter() - start) * 1000
+                _td["main_responded_in_time"] = True
+                _td["ttmr_ms"] = elapsed
                 print(
                     f"[ResponseOrchestrator] Main responded in {elapsed:.0f}ms, no filler needed"
                 )
 
                 # Classifier 結果を確認
                 route = await classifier_task
+                _td["classifier_ms"] = (time.perf_counter() - start) * 1000
+                _td["route"] = route
                 print(
                     f"[ResponseOrchestrator] route='{route}' in {(time.perf_counter() - start) * 1000:.0f}ms"
                 )
@@ -357,15 +415,21 @@ class ResponseOrchestrator:
                     # RAG処理は時間がかかるため、フィラーが使用可能なら出力する
                     if enable_filler and filler_queue is not None:
                         filler_text = ""
+                        t_filler_start = time.perf_counter()
                         while True:
                             chunk = await filler_queue.get()
                             if chunk is None:
                                 break
+                            if not filler_text and chunk:
+                                _td["filler_ttfb_ms"] = (time.perf_counter() - start) * 1000
                             yield chunk
                             filler_text += chunk
                             if any(c in chunk for c in sentence_end_chars):
                                 break
                         if filler_text.strip():
+                            _td["filler_fired"] = True
+                            _td["filler_text"] = filler_text.strip()
+                            _td["filler_duration_ms"] = (time.perf_counter() - t_filler_start) * 1000
                             elapsed = (time.perf_counter() - start) * 1000
                             print(
                                 f"[ResponseOrchestrator] filler sent for RAG in {elapsed:.0f}ms: '{filler_text.strip()}'"
@@ -392,12 +456,16 @@ class ResponseOrchestrator:
             #    ★ Classifier を待たない ★
             #    ★ 全文収集せず、チャンク単位で即 yield ★
             # =============================
+            _td["main_responded_in_time"] = False
             filler_text = ""
             if enable_filler and filler_queue is not None:
+                t_filler_start = time.perf_counter()
                 while True:
                     chunk = await filler_queue.get()
                     if chunk is None:
                         break
+                    if not filler_text and chunk:
+                        _td["filler_ttfb_ms"] = (time.perf_counter() - start) * 1000
                     yield chunk
                     filler_text += chunk
 
@@ -406,6 +474,9 @@ class ResponseOrchestrator:
                         break
 
                 if filler_text.strip():
+                    _td["filler_fired"] = True
+                    _td["filler_text"] = filler_text.strip()
+                    _td["filler_duration_ms"] = (time.perf_counter() - t_filler_start) * 1000
                     elapsed = (time.perf_counter() - start) * 1000
                     print(
                         f"[ResponseOrchestrator] filler sent in {elapsed:.0f}ms: '{filler_text.strip()}'"
@@ -415,6 +486,8 @@ class ResponseOrchestrator:
             # ③ フィラー出力後に Classifier を確認
             # =============================
             route = await classifier_task
+            _td["classifier_ms"] = (time.perf_counter() - start) * 1000
+            _td["route"] = route
             elapsed = (time.perf_counter() - start) * 1000
             print(f"[ResponseOrchestrator] route='{route}' in {elapsed:.0f}ms")
 
@@ -431,6 +504,7 @@ class ResponseOrchestrator:
                 first_chunk = await main_first_task
             except StopAsyncIteration:
                 return
+            _td["ttmr_ms"] = (time.perf_counter() - start) * 1000
             if first_chunk:
                 yield first_chunk
             async for chunk in main_iter:
