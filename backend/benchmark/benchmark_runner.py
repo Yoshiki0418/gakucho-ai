@@ -22,7 +22,7 @@ from datetime import datetime
 from benchmark.benchmark_queries import BENCHMARK_QUERIES
 
 # --- デフォルト設定 ---
-DEFAULT_API_URL = "http://localhost:8076"
+DEFAULT_API_URL = "http://localhost:8077"
 DEFAULT_TRIALS = 5
 DEFAULT_OUTPUT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -31,9 +31,11 @@ DEFAULT_OUTPUT_DIR = os.path.join(
 
 # --- 条件定義 ---
 CONDITIONS = {
-    "dynamic": {"filler_mode": "dynamic"},
-    "static": {"filler_mode": "static"},
-    "off": {"filler_mode": "off"},
+    "dynamic_filler": {"filler_mode": "dynamic", "mode": "general"},  # 提案手法 (実験1互換用)
+    "static_filler": {"filler_mode": "static", "mode": "general"},    # 比較手法1（定型フィラー）
+    "filler_off": {"filler_mode": "off", "mode": "general"},          # 比較手法2（フィラーなし）
+    "multi_agent": {"filler_mode": "off", "mode": "general"},     # 実験2用（提案手法・Multi-Agent・フィラー無効）
+    "single_agent": {"filler_mode": "off", "mode": "baseline"},   # 実験2用（比較手法・Single Agent・フィラー無効）
 }
 
 # CSV カラム定義
@@ -126,12 +128,14 @@ def run_benchmark(
     # 使用するカテゴリをフィルタ
     query_categories = categories or list(BENCHMARK_QUERIES.keys())
 
-    total_queries = sum(
-        len(BENCHMARK_QUERIES[cat]["queries"])
-        for cat in query_categories
-        if cat in BENCHMARK_QUERIES
-    )
-    total_runs = total_queries * trials * len(conditions)
+    total_runs = 0
+    for condition in conditions:
+        for category in query_categories:
+            if category not in BENCHMARK_QUERIES:
+                continue
+            if condition in ["multi_agent", "single_agent"] and category in ["rag_search", "greeting", "unclear_query", "emotional_query"]:
+                continue
+            total_runs += len(BENCHMARK_QUERIES[category]["queries"]) * trials
 
     print(f"=== ベンチマーク開始 ===")
     print(f"  API: {api_url}")
@@ -141,6 +145,11 @@ def run_benchmark(
     print(f"  合計実行数: {total_runs}")
     print(f"  出力先: {output_path}")
     print()
+
+    # CSV ファイルを初期化してヘッダーを書き込む
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        writer.writeheader()
 
     results = []
     run_count = 0
@@ -152,6 +161,10 @@ def run_benchmark(
         for category in query_categories:
             if category not in BENCHMARK_QUERIES:
                 print(f"  [SKIP] 不明なカテゴリ: {category}")
+                continue
+
+            if condition in ["multi_agent", "single_agent"] and category in ["rag_search", "greeting", "unclear_query", "emotional_query"]:
+                print(f"  [SKIP] 実験2評価対象外カテゴリ: {category}")
                 continue
 
             cat_info = BENCHMARK_QUERIES[category]
@@ -174,6 +187,7 @@ def run_benchmark(
                         api_url=api_url,
                         query=query,
                         filler_mode=cond_params["filler_mode"],
+                        mode=cond_params.get("mode", "general"),
                     )
 
                     row = {
@@ -199,6 +213,11 @@ def run_benchmark(
                     }
                     results.append(row)
 
+                    # 1行ごとにCSVに追記する（途中で強制終了しても保存されるようにする）
+                    with open(output_path, "a", newline="", encoding="utf-8") as f:
+                        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+                        writer.writerow(row)
+
                     ttft = timing.get("ttft_ms", "?")
                     ttfa = timing.get("ttfa_ms", "?")
                     total = timing.get("total_ms", "?")
@@ -207,12 +226,6 @@ def run_benchmark(
 
                     # APIに負荷をかけすぎないよう少し待つ
                     time.sleep(1.0)
-
-    # CSV 出力
-    with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
-        writer.writeheader()
-        writer.writerows(results)
 
     print()
     print(f"=== ベンチマーク完了 ===")

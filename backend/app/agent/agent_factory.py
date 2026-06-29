@@ -4,7 +4,6 @@ from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.agent.general_conversation.domains import (
     LifePlanningAgent,
     LocationAgent,
-    PresidentAgent,
     ResearchAgent,
 )
 from app.agent.modules.decision_module import LLMDecisionClassifier
@@ -29,13 +28,11 @@ def build_conversation_orchestrator():
     research_agent = ResearchAgent()
     life_planning_agent = LifePlanningAgent()
     location_agent = LocationAgent()
-    president_agent = PresidentAgent()
 
     gc_agent = GeneralConversationAgent(
         research_agent.agent,
         life_planning_agent.agent,
         location_agent.agent,
-        president_agent.agent,
     )
 
     # --- Classifier (ローカル Gemma で高速分類) ---

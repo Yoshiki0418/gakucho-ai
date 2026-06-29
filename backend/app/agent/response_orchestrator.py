@@ -6,6 +6,7 @@ from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.agent.modules.decision_module import LLMDecisionClassifier
 from app.agent.modules.rag_module import RAGModule
 from app.models.llm import BaseLLM
+from app.agent.baseline_agent import BaselineAgent
 
 
 class ResponseOrchestrator:
@@ -375,12 +376,21 @@ class ResponseOrchestrator:
                 filler_queue = await self._start_filler_producer(text, history=history)
 
         # Main を dialogue 前提で先行起動
-        main_iter = self.daily_agent.stream_generate(
-            user_id=user_id,
-            message=text,
-            history=history,
-            mode=mode,
-        ).__aiter__()
+        if mode == "baseline":
+            baseline_agent = BaselineAgent()
+            main_iter = baseline_agent.stream_generate(
+                user_id=user_id,
+                message=text,
+                history=history,
+            ).__aiter__()
+        else:
+            main_iter = self.daily_agent.stream_generate(
+                user_id=user_id,
+                message=text,
+                history=history,
+                mode=mode,
+            ).__aiter__()
+        
         main_first_task = asyncio.create_task(main_iter.__anext__())
 
         try:

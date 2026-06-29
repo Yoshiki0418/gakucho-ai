@@ -78,7 +78,7 @@ class OpenAILLM(BaseLLM):
             kwargs["tools"] = tool_calls
             kwargs["tool_choice"] = "auto"
 
-        response = openai_client.chat.completions.create(**kwargs)
+        response = await openai_streaming_client.chat.completions.create(**kwargs)
 
         return response.choices[0].message.content.strip()
 

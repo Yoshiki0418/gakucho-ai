@@ -187,13 +187,29 @@ def main():
     print("-" * 50)
     print("評価完了！")
     print(f"結果保存先: {output_path}")
-    print("\n【サマリ (Mean Scores)】")
-    
+    print("\n【条件別サマリ (Mean Scores) & Mann-Whitney U検定】")
+    try:
+        from scipy.stats import mannwhitneyu
+        has_scipy = True
+    except ImportError:
+        has_scipy = False
+
     for m in metrics:
-        valid_scores = eval_df[eval_df[f"{m}_score"] > 0][f"{m}_score"]
-        avg = valid_scores.mean() if not valid_scores.empty else 0
         name = m.replace('_', ' ').title()
-        print(f"{name:25s}: {avg:.2f} / 5.0")
+        print(f"\n--- {name} ---")
+        
+        dyn = eval_df[eval_df["condition"] == "dynamic_filler"][f"{m}_score"].dropna()
+        sta = eval_df[eval_df["condition"] == "static_filler"][f"{m}_score"].dropna()
+        
+        dyn_mean = dyn.mean() if not dyn.empty else 0
+        sta_mean = sta.mean() if not sta.empty else 0
+        
+        print(f"  dynamic_filler (n={len(dyn)}): {dyn_mean:.2f} / 5.0")
+        print(f"  static_filler  (n={len(sta)}): {sta_mean:.2f} / 5.0")
+        
+        if has_scipy and len(dyn) > 0 and len(sta) > 0:
+            stat, p = mannwhitneyu(dyn, sta, alternative='greater')
+            print(f"  U-test p-value: {p:.3e} {'(Significant!)' if p < 0.05 else ''}")
 
 if __name__ == "__main__":
     main()
