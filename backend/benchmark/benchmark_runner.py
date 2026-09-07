@@ -31,11 +31,12 @@ DEFAULT_OUTPUT_DIR = os.path.join(
 
 # --- 条件定義 ---
 CONDITIONS = {
-    "dynamic_filler": {"filler_mode": "dynamic", "mode": "general"},  # 提案手法 (実験1互換用)
-    "static_filler": {"filler_mode": "static", "mode": "general"},    # 比較手法1（定型フィラー）
-    "filler_off": {"filler_mode": "off", "mode": "general"},          # 比較手法2（フィラーなし）
-    "multi_agent": {"filler_mode": "off", "mode": "general"},     # 実験2用（提案手法・Multi-Agent・フィラー無効）
-    "single_agent": {"filler_mode": "off", "mode": "baseline"},   # 実験2用（比較手法・Single Agent・フィラー無効）
+    "dynamic_filler": {"filler_mode": "dynamic", "mode": "general"},        # 外部動的フィラー（提案手法 実験1互換用）
+    "static_filler": {"filler_mode": "static", "mode": "general"},          # 静的フィラー（比較手法1）
+    "filler_off": {"filler_mode": "off", "mode": "general"},                # フィラーなし（比較手法2）
+    "endogenous_filler": {"filler_mode": "endogenous", "mode": "general"},  # ★内因的フィラー（新実験条件）
+    "multi_agent": {"filler_mode": "off", "mode": "general"},               # 実験2用（Multi-Agent・フィラー無効）
+    "single_agent": {"filler_mode": "off", "mode": "baseline"},             # 実験2用（Single Agent・フィラー無効）
 }
 
 # CSV カラム定義
@@ -57,6 +58,8 @@ CSV_COLUMNS = [
     "classifier_ms",
     "route",
     "main_responded_in_time",
+    "model_filler_fired",
+    "model_filler_text",
     "response_text",
     "timestamp",
 ]
@@ -208,6 +211,8 @@ def run_benchmark(
                         "classifier_ms": timing.get("classifier_ms"),
                         "route": timing.get("route"),
                         "main_responded_in_time": timing.get("main_responded_in_time"),
+                        "model_filler_fired": timing.get("model_filler_fired"),
+                        "model_filler_text": timing.get("model_filler_text", ""),
                         "response_text": timing.get("response_text", ""),
                         "timestamp": datetime.now().isoformat(),
                     }

@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/lip-sync/:path*',
-        destination: 'http://127.0.0.1:8080/:path*',
+        destination: 'http://127.0.0.1:8081/:path*',
       },
     ]
   },

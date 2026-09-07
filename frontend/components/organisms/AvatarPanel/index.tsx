@@ -1,43 +1,137 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-/** Pixel Streaming サーバーの URL */
-const PIXEL_STREAMING_URL = '/ue-stream/'
+import { ZOOM } from '@/features/avatar/zoom'
+
+/**
+ * Pixel Streaming のプレイヤーページ。
+ *
+ * `player.html` ではなく `uiless.html` を使う。前者はフルスクリーンボタンや設定アイコンを
+ * 映像の上に重ねてくるが、この画面ではどれも不要なため。
+ * `AutoConnect` を付けないと「CLICK TO START」が出たまま接続しない。
+ */
+const PIXEL_STREAMING_URL =
+  '/ue-stream/uiless.html?AutoConnect=true&AutoPlayVideo=true&StartVideoMuted=true'
+
+// HTML の load 完了と WebRTC 映像の受信開始は別物。映像時刻を監視して、
+// 接続失敗・フリーズ時は古い PeerConnection を iframe ごと破棄して張り直す。
+const FIRST_FRAME_TIMEOUT_MS = 25_000
+const FROZEN_FRAME_TIMEOUT_MS = 12_000
+const RECONNECT_DELAY_MS = 3_000
+
+/**
+ * 配信されてくる映像は「Unreal Editor のウィンドウ全体」なので、
+ * その中の 3D ビューポート部分だけを切り出して表示する。
+ *
+ * 3D ビューだけを配信する `LevelEditorViewport` ソースは Linux では
+ * フレームを 1 枚も生成しないため、`Editor` ソース (ウィンドウ全体) しか選べない。
+ *
+ * 下の数値は 1920x1080 で起動したエディタ (start-gakucho.sh の
+ * -EditorPixelStreamingRes) を実測したもの。右側にアウトライナー、下に
+ * シーケンサー (学長の再生に必要) が居るぶん、ビューポートはこの範囲になる。
+ * エディタのパネル配置を変えるとずれるので、そのときはここを測り直す。
+ */
+const STREAM = { width: 1920, height: 1080 }
+const VIEWPORT = { x: 0, y: 130, width: 1156, height: 592 }
+
+const cropStyle = (zoom: number): React.CSSProperties => {
+  // ビューポート(横長)をパネル(縦長)に「はみ出させて」収める。
+  // 高さを基準に拡大し、左右の溢れた分を切り落とす。幅を基準にすると、
+  // パネルの方が縦長なぶん下のシーケンサーまで見えてしまう。
+  //
+  // zoom=1 のとき、パネルの高さ = ビューポートの高さ。zoom を上げるとその分だけ
+  // 見える範囲が狭まる (= 寄る)。ビューポートの中心を常にパネルの中心に置く。
+  const scaleH = (STREAM.height / VIEWPORT.height) * zoom * 100
+  const centerX = ((VIEWPORT.x + VIEWPORT.width / 2) / STREAM.width) * 100
+  const centerY = ((VIEWPORT.y + VIEWPORT.height / 2) / STREAM.height) * 100
+
+  return {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    height: `${scaleH}%`,
+    // 映像の縦横比を保つ。崩すと Pixel Streaming 側がレターボックスを入れてしまう。
+    aspectRatio: `${STREAM.width} / ${STREAM.height}`,
+    transform: `translate(-${centerX}%, -${centerY}%)`,
+    border: 'none',
+    display: 'block',
+  }
+}
 
 type AvatarPanelProps = {
   frameSrc: string | null
-  /** Pixel Streaming サーバーの URL（デフォルト: 127.0.0.1:80） */
   streamUrl?: string
+  /** 映像の切り抜き倍率。UI は設定モーダル側にある */
+  zoom?: number
 }
 
 export const AvatarPanel: React.FC<AvatarPanelProps> = ({
   frameSrc,
   streamUrl = PIXEL_STREAMING_URL,
+  zoom = ZOOM.default,
 }) => {
   const [isLoaded, setIsLoaded] = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const [streamAttempt, setStreamAttempt] = useState(0)
+  const [mountStream, setMountStream] = useState(true)
   const isSpeaking = frameSrc !== null
-
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [hasStarted, setHasStarted] = useState(false)
 
-  // 最初の「CLICK TO START」クリックを検知するための監視処理
+  const attemptedStreamUrl = useMemo(() => {
+    const separator = streamUrl.includes('?') ? '&' : '?'
+    return `${streamUrl}${separator}gakuchoAttempt=${streamAttempt}`
+  }, [streamAttempt, streamUrl])
+
   useEffect(() => {
-    const checkFocus = () => {
-      // ユーザーが iframe をクリックしてフォーカスが移った場合
-      if (document.activeElement === iframeRef.current) {
-        setHasStarted(true)
+    if (!mountStream) return
+
+    const startedAt = Date.now()
+    let lastFrameAt = startedAt
+    let lastVideoTime = -1
+    let receivedFrame = false
+    let reconnecting = false
+
+    const reconnect = () => {
+      if (reconnecting) return
+      reconnecting = true
+      setIsLoaded(false)
+      setIsReconnecting(true)
+
+      // 先に iframe を外して旧 PeerConnection/NVENC セッションを解放し、
+      // 少し待ってから新しい接続を作る。即時リロードはセッションを一時的に
+      // 二重化し、複数端末利用時の NVENC 枯渇を起こしやすい。
+      setMountStream(false)
+      window.setTimeout(() => {
+        setStreamAttempt((attempt) => attempt + 1)
+        setMountStream(true)
+      }, RECONNECT_DELAY_MS)
+    }
+
+    const timer = window.setInterval(() => {
+      try {
+        const video = iframeRef.current?.contentDocument?.querySelector('video')
+        if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          const videoTime = video.currentTime
+          if (video.videoWidth > 0 && videoTime > lastVideoTime + 0.001) {
+            lastVideoTime = videoTime
+            lastFrameAt = Date.now()
+            receivedFrame = true
+            setIsLoaded(true)
+            setIsReconnecting(false)
+          }
+        }
+      } catch {
+        // 現在は同一オリジンだが、将来 streamUrl が外部 URL になった場合は
+        // DOM を参照できない。その場合もタイムアウトで再接続する。
       }
-    }
 
-    const interval = setInterval(checkFocus, 200)
-    window.addEventListener('blur', checkFocus)
+      const timeout = receivedFrame ? FROZEN_FRAME_TIMEOUT_MS : FIRST_FRAME_TIMEOUT_MS
+      if (Date.now() - lastFrameAt >= timeout) reconnect()
+    }, 1_000)
 
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('blur', checkFocus)
-    }
-  }, [])
+    return () => window.clearInterval(timer)
+  }, [mountStream, streamAttempt, streamUrl])
 
   return (
     <div
@@ -75,39 +169,25 @@ export const AvatarPanel: React.FC<AvatarPanelProps> = ({
               animation: 'spin 1s linear infinite',
             }}
           />
-          <span>ストリーミング接続中…</span>
+          <span>{isReconnecting ? '映像を再接続中…' : 'ストリーミング接続中…'}</span>
           <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
         </div>
       )}
 
-      {/* UE5 Pixel Streaming iframe */}
-      <iframe
-        ref={iframeRef}
-        src={streamUrl}
-        title="学長 3D アバター (Pixel Streaming)"
-        allow="autoplay; fullscreen; microphone; camera"
-        style={{
-          width: '100%',
-          height: '100%',
-          border: 'none',
-          display: 'block',
-          opacity: isLoaded ? 1 : 0,
-          transition: 'opacity 0.4s ease',
-          pointerEvents: hasStarted ? 'none' : 'auto', // 最初のクリック以降は無効化
-        }}
-        onLoad={() => setIsLoaded(true)}
-      />
-
-      {/* 画面操作（ドラッグやクリックでの視点移動）を防ぐための透明なオーバーレイ */}
-      {/* 初回の「CLICK TO START」を押した後だけ有効になる */}
-      {hasStarted && (
-        <div
+      {/* UE5 Pixel Streaming iframe（エディタ画面のうちビューポートだけを切り出す） */}
+      {mountStream && (
+        <iframe
+          key={streamAttempt}
+          ref={iframeRef}
+          src={attemptedStreamUrl}
+          title="学長 3D アバター (Pixel Streaming)"
+          allow="autoplay; fullscreen"
           style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 1,
-            backgroundColor: 'transparent',
-            cursor: 'default',
+            ...cropStyle(zoom),
+            opacity: isLoaded ? 1 : 0,
+            transition: 'opacity 0.4s ease, height 0.2s ease',
+            // 視点移動やクリックを拾わせない
+            pointerEvents: 'none',
           }}
         />
       )}
@@ -143,4 +223,3 @@ export const AvatarPanel: React.FC<AvatarPanelProps> = ({
     </div>
   )
 }
-

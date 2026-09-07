@@ -1,0 +1,6 @@
+# npm ci でイメージ内に入れた node_modules を、ホスト側のもので上書きしないこと。
+# Windows/NTFS からコピーしてきた node_modules は実行ビットが落ちており、
+# 上書きすると `next: Permission denied` でビルドが失敗する。
+node_modules
+.next
+.git

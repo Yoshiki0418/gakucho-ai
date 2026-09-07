@@ -5,12 +5,25 @@ import ChatPanel from '@/components/organisms/ChatPanel'
 import { useTextChat } from '@/features/text-chat/hooks/useTextChat'
 import { AvatarPanel } from '@/components/organisms/AvatarPanel'
 import { QRCodeDisplay } from '@/components/organisms/QRCodeDisplay'
+import { ZOOM } from '@/features/avatar/zoom'
+import type { LipSyncMode } from '@/features/text-chat/hooks/useTextChat'
 
 export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [closedUrls, setClosedUrls] = useState<Set<string>>(new Set())
   const [appMode, setAppMode] = useState<'general' | 'ceremony'>('general')
+  const [fillerMode, setFillerMode] = useState<string>('endogenous')
+  // メイン会話モデル（既定= gpt-5.6-sol）
+  const [mainModel, setMainModel] = useState<string>('gpt-5.6-sol')
+  // 動的フィラー生成に使うモデル（既定=現状モデル gpt-5.2）
+  const [fillerModel, setFillerModel] = useState<string>('gpt-5.2')
+  // QRコード表示（モード切替とは独立して個別トグル）
+  const [qrEnabled, setQrEnabled] = useState<boolean>(true)
+  // UE アバターの口の動かし方（設定モーダルの「一般」タブ）
+  const [lipSyncMode, setLipSyncMode] = useState<LipSyncMode>('legacy')
+  // アバター映像の切り抜き倍率。UE のカメラは動かない
+  const [zoom, setZoom] = useState<number>(ZOOM.default)
 
   const [chatWidth, setChatWidth] = useState<number | string>('35%')
   const [isResizing, setIsResizing] = useState(false)
@@ -53,7 +66,8 @@ export default function ChatDemoPage() {
 
     setIsSending(true)
     try {
-      await startChat(message, appMode)
+      // 動的フィラー時のみフィラーモデルを送る（他モードでは無視されるが無害）
+      await startChat(message, appMode, fillerMode, mainModel, fillerModel, lipSyncMode)
     } finally {
       setIsSending(false)
     }
@@ -68,8 +82,9 @@ export default function ChatDemoPage() {
 
 
 
-  // ユーザーが閉じたURLでなければ表示する (式典モード時は非表示)
-  const displayUrl = appMode === 'general' && latestUrl && !closedUrls.has(latestUrl) ? latestUrl : null
+  // QR表示トグルがONで、ユーザーが閉じたURLでなければ表示する
+  // （従来はモード依存だったが、設定で個別にON/OFF可能にした）
+  const displayUrl = qrEnabled && latestUrl && !closedUrls.has(latestUrl) ? latestUrl : null
 
   const handleCloseQRCode = () => {
     if (latestUrl) {
@@ -113,6 +128,18 @@ export default function ChatDemoPage() {
           appMode={appMode}
           onToggleMode={() => setAppMode((prev) => (prev === 'general' ? 'ceremony' : 'general'))}
           width={chatWidth}
+          fillerMode={fillerMode}
+          onFillerModeChange={setFillerMode}
+          mainModel={mainModel}
+          onMainModelChange={setMainModel}
+          fillerModel={fillerModel}
+          onFillerModelChange={setFillerModel}
+          qrEnabled={qrEnabled}
+          onQrEnabledChange={setQrEnabled}
+          zoom={zoom}
+          onZoomChange={setZoom}
+          lipSyncMode={lipSyncMode}
+          onLipSyncModeChange={setLipSyncMode}
         />
 
         {/* リサイズ用ハンドル */}
@@ -142,7 +169,7 @@ export default function ChatDemoPage() {
         </div>
 
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <AvatarPanel frameSrc={avatarFrameSrc} />
+          <AvatarPanel frameSrc={avatarFrameSrc} zoom={zoom} />
           <QRCodeDisplay url={displayUrl} onClose={handleCloseQRCode} />
         </div>
       </section>

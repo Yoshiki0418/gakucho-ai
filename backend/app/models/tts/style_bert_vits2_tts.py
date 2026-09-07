@@ -13,6 +13,8 @@ import soundfile as sf
 import style_bert_vits2.models.infer as infer_module
 import style_bert_vits2.nlp.bert_models as bert_models
 import torch
+from style_bert_vits2.models import commons
+from style_bert_vits2.nlp import clean_text
 from style_bert_vits2.constants import (
     DEFAULT_LENGTH,
     DEFAULT_NOISE,
@@ -130,3 +132,164 @@ class StyleBertVITS2_TTS(BaseTTS):
         buffer.seek(0)
         b64_str = base64.b64encode(buffer.read()).decode("utf-8")
         return b64_str
+
+    @staticmethod
+    def _phone_to_viseme(phone: str) -> str:
+        """Style-Bert-VITS2 の日本語音素を口形へまとめる。"""
+        p = phone.lower()
+        if p in {"a", "i", "u", "e", "o"}:
+            return p.upper()
+        if p in {"p", "b", "m"} or phone == "N":
+            return "M"
+        if p in {"f", "v"}:
+            return "F"
+        if p in {"s", "z", "sh", "j", "ch", "ts"}:
+            return "S"
+        if p in {"t", "d", "n", "r"}:
+            return "T"
+        if p in {"k", "g", "h"}:
+            return "K"
+        if p == "w":
+            return "U"
+        if p == "y":
+            return "I"
+        return "sil"
+
+    def synthesize_with_visemes_to_base64(self, text: str) -> dict:
+        """音声と、同じ推論で得た音素境界に基づくビセーム列を返す。
+
+        VITS の duration predictor が生成に実際に使用した alignment を使うため、
+        文字数による均等割りではなく、生成された発話の子音・母音長に一致する。
+        """
+        if not text.strip():
+            raise ValueError("入力テキストが空です。")
+
+        model = self.tts_model
+        hps = model.hyper_parameters
+        net_g = model._TTSModel__net_g
+        if net_g is None:
+            model.load()
+            net_g = model._TTSModel__net_g
+        if net_g is None:
+            raise RuntimeError("TTS model is not loaded")
+
+        use_jp_extra = hps.version.endswith("JP-Extra")
+        _, phone_names, _, _ = clean_text(
+            text,
+            Languages.JP,
+            use_jp_extra=use_jp_extra,
+            raise_yomi_error=False,
+        )
+
+        bert, ja_bert, en_bert, phones, tones, lang_ids = infer_module.get_text(
+            text,
+            Languages.JP,
+            hps,
+            model.device,
+        )
+        if hps.data.add_blank:
+            # VITS が音素間に挿入する blank は無音ではなく、前後の音素をつなぐ
+            # 潜在フレーム。句読点や先頭末尾の本当の無音とは区別する。
+            phone_names = commons.intersperse(phone_names, None)
+
+        style_id = model.style2id["Neutral"]
+        style_vector = model._TTSModel__get_style_vector(style_id, 1.0)
+
+        with torch.no_grad():
+            x_tst = phones.to(model.device).unsqueeze(0)
+            tone_tensor = tones.to(model.device).unsqueeze(0)
+            language_tensor = lang_ids.to(model.device).unsqueeze(0)
+            ja_bert_tensor = ja_bert.to(model.device).unsqueeze(0)
+            x_tst_lengths = torch.LongTensor([phones.size(0)]).to(model.device)
+            style_tensor = torch.from_numpy(style_vector).to(model.device).unsqueeze(0)
+            sid_tensor = torch.LongTensor([0]).to(model.device)
+
+            if use_jp_extra:
+                output = net_g.infer(
+                    x_tst,
+                    x_tst_lengths,
+                    sid_tensor,
+                    tone_tensor,
+                    language_tensor,
+                    ja_bert_tensor,
+                    style_vec=style_tensor,
+                    sdp_ratio=DEFAULT_SDP_RATIO,
+                    noise_scale=DEFAULT_NOISE,
+                    noise_scale_w=DEFAULT_NOISEW,
+                    length_scale=1.1,
+                )
+            else:
+                output = net_g.infer(
+                    x_tst,
+                    x_tst_lengths,
+                    sid_tensor,
+                    tone_tensor,
+                    language_tensor,
+                    bert.to(model.device).unsqueeze(0),
+                    ja_bert_tensor,
+                    en_bert.to(model.device).unsqueeze(0),
+                    style_vec=style_tensor,
+                    sdp_ratio=DEFAULT_SDP_RATIO,
+                    noise_scale=DEFAULT_NOISE,
+                    noise_scale_w=DEFAULT_NOISEW,
+                    length_scale=1.1,
+                )
+
+        audio = output[0][0, 0].detach().cpu().float().numpy()
+        alignment = output[1][0, 0].detach().cpu().float().numpy()
+        durations = alignment.sum(axis=0)
+        if len(phone_names) != len(durations):
+            raise RuntimeError(
+                "TTS alignment length mismatch: "
+                f"phones={len(phone_names)}, durations={len(durations)}"
+            )
+        audio = model._TTSModel__convert_to_16_bit_wav(audio)
+        sr = hps.data.sampling_rate
+        audio_duration = len(audio) / float(sr)
+
+        # alignment は音声フレーム単位なので、実際のWAV長へ比例変換する。
+        total_frames = float(durations.sum()) or 1.0
+        cursor = 0.0
+        raw_frames = []
+        base_visemes = [
+            self._phone_to_viseme(phone) if phone is not None else None
+            for phone in phone_names
+        ]
+        for index, (phone, frame_count) in enumerate(zip(phone_names, durations)):
+            start = cursor / total_frames * audio_duration
+            cursor += float(frame_count)
+            end = cursor / total_frames * audio_duration
+            viseme = base_visemes[index]
+            if viseme is None:
+                previous = next(
+                    (v for v in reversed(base_visemes[:index]) if v not in (None, "sil")),
+                    None,
+                )
+                following = next(
+                    (v for v in base_visemes[index + 1 :] if v not in (None, "sil")),
+                    None,
+                )
+                # 口形は少し先行するため、次の音素があればそちらへ寄せる。
+                viseme = following or previous or "sil"
+            if end - start < 0.004:
+                continue
+            raw_frames.append({"start": start, "end": end, "viseme": viseme})
+
+        # 連続する同じ口形をまとめ、通信量とUE側の更新回数を抑える。
+        visemes = []
+        for frame in raw_frames:
+            if visemes and visemes[-1]["viseme"] == frame["viseme"]:
+                visemes[-1]["end"] = frame["end"]
+            else:
+                visemes.append(frame)
+
+        buffer = io.BytesIO()
+        sf.write(buffer, audio, sr, format="WAV")
+        audio_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return {
+            "audio": audio_b64,
+            "visemes": visemes,
+            "duration": audio_duration,
+        }

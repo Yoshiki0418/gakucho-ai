@@ -21,6 +21,11 @@ from app.prompts.president_persona import get_president_persona
 def build_conversation_orchestrator():
     """学長AI全体の構成要素（RAG / Daily Agent / Classifier / Filler）をまとめて初期化"""
 
+    # 実験条件: 環境変数で切り替え（既定は現行挙動を維持）
+    # 値: "dynamic"(=external 外部動的フィラー) / "static" / "none"(=off) / "endogenous"
+    FILLER_MODE = os.getenv("FILLER_MODE", "dynamic")
+    print(f"[agent_factory] FILLER_MODE={FILLER_MODE}")
+
     # 共通ペルソナを取得
     president_persona = get_president_persona()
 
@@ -33,6 +38,7 @@ def build_conversation_orchestrator():
         research_agent.agent,
         life_planning_agent.agent,
         location_agent.agent,
+        endogenous_filler=(FILLER_MODE == "endogenous"),
     )
 
     # --- Classifier (ローカル Gemma で高速分類) ---
@@ -45,9 +51,9 @@ def build_conversation_orchestrator():
     )
 
     # --- Filler LLM ---
-    filler_llm = OpenAILLM(
-        model_name="gpt-5.2",
-        system_prompt=f"""{president_persona}
+    # システムプロンプトは変数化し、フィラーモデルを差し替えるとき（別モデル指定）に
+    # orchestrator 側で同じプロンプトのまま LLM を再生成できるようにする。
+    filler_system_prompt = f"""{president_persona}
             あなたはフィラー（つなぎ会話）専用です。
             ユーザーの発話内容をふまえ、自然な一言を1文だけ返してください。
 
@@ -65,7 +71,11 @@ def build_conversation_orchestrator():
             C) 確認の予告 — 調査や検索が必要なとき、何について調べるかを具体的に一言添える
 
             ■ 重要: 定型文ではなく、相手の文脈に沿ったオリジナルな一言を返すこと。
-            ■ 出力: 不要→空文字 / 必要→日本語1文のみ""",
+            ■ 出力: 不要→空文字 / 必要→日本語1文のみ"""
+
+    filler_llm = OpenAILLM(
+        model_name="gpt-5.2",
+        system_prompt=filler_system_prompt,
     )
 
     # --- Retriever / RAG Module ---
@@ -87,6 +97,8 @@ def build_conversation_orchestrator():
         classifier_llm=classifier,
         filler_llm=filler_llm,
         filler_timeout=0.5,
+        filler_mode=FILLER_MODE,
+        filler_system_prompt=filler_system_prompt,
     )
 
     return orchestrator

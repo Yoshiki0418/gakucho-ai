@@ -15,7 +15,15 @@ type SSEAudio = {
   audio: string
   sentence?: string
   mime?: string
+  duration?: number
+  visemes?: VisemeFrame[]
 }
+type VisemeFrame = {
+  start: number
+  end: number
+  viseme: string
+}
+export type LipSyncMode = 'legacy' | 'phoneme'
 type SSEFrame = {
   type: 'frame_chunk'
   image: string
@@ -44,7 +52,81 @@ export function useTextChat(endpoint: string) {
   // ========= Web Audio 再生制御 =========
   const audioCtxRef = useRef<AudioContext | null>(null)
   const playbackTimeRef = useRef<number>(0)
-  const queueClearedRef = useRef<boolean>(false)
+  const audioGenerationRef = useRef<number>(0)
+  const audioDecodeQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const lipSyncActiveRef = useRef<boolean>(false)
+  const lipSyncRequestRef = useRef<number>(0)
+  const lipSyncClientIdRef = useRef<string | null>(null)
+  const lipSyncModeRef = useRef<LipSyncMode>('legacy')
+
+  /**
+   * UE の口パク用トラックを音声再生状態に合わせる。
+   * stop は pagehide 中にも送れるよう keepalive を使う。
+   */
+  const setLipSyncActive = async (active: boolean, force = false) => {
+    if (!force && lipSyncActiveRef.current === active) return
+
+    lipSyncActiveRef.current = active
+    const requestId = ++lipSyncRequestRef.current
+    const action = active ? 'start' : 'stop'
+    if (!lipSyncClientIdRef.current) {
+      lipSyncClientIdRef.current = crypto.randomUUID()
+    }
+    const query = new URLSearchParams({
+      client_id: lipSyncClientIdRef.current,
+      mode: lipSyncModeRef.current,
+    })
+
+    try {
+      const response = await fetch(`/lip-sync/${action}?${query}`, {
+        method: 'GET',
+        cache: 'no-store',
+        keepalive: !active,
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      console.log(`[LipSync] ${action}`)
+    } catch (error) {
+      console.error(`[LipSync] failed to ${action}:`, error)
+      // この要求より後の状態変更が無ければ、次回に再試行できるよう戻す。
+      if (lipSyncRequestRef.current === requestId) {
+        lipSyncActiveRef.current = !active
+      }
+    }
+  }
+
+  const sendVisemeTimeline = async (
+    frames: VisemeFrame[],
+    delayMs: number,
+    generation: number,
+  ) => {
+    if (
+      lipSyncModeRef.current !== 'phoneme' ||
+      !frames.length ||
+      generation !== audioGenerationRef.current
+    ) return
+    if (!lipSyncClientIdRef.current) {
+      lipSyncClientIdRef.current = crypto.randomUUID()
+    }
+    const query = new URLSearchParams({
+      client_id: lipSyncClientIdRef.current,
+    })
+    try {
+      const response = await fetch(`/lip-sync/timeline?${query}`, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delay_ms: Math.max(0, delayMs),
+          frames,
+        }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    } catch (error) {
+      console.error('[LipSync] timeline送信失敗:', error)
+    }
+  }
 
   const resetChat = async () => {
     stopAllAudio()
@@ -60,10 +142,11 @@ export function useTextChat(endpoint: string) {
 
     // ★ バックエンドの履歴もリセットする
     try {
-      const apiBase =
-        process.env.NEXT_PUBLIC_API_BASE_URL ??
-        'http://localhost:8076'
-      const resetUrl = `${apiBase}/api/text-chat/reset`
+      // NEXT_PUBLIC_API_BASE_URL が空なら相対URLにする（nginx経由でバックエンドに届く）
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+      const resetUrl = apiBase
+        ? `${apiBase}/api/text-chat/reset`
+        : '/api/text-chat/reset'
       console.log('[useTextChat] Resetting history on backend:', resetUrl)
       await fetch(resetUrl, { method: 'POST' })
     } catch (err) {
@@ -101,27 +184,39 @@ export function useTextChat(endpoint: string) {
     return buf
   }
 
-  const enqueueAudioBuffer = (buf: AudioBuffer) => {
+  const enqueueAudioBuffer = (
+    buf: AudioBuffer,
+    generation: number,
+    visemes: VisemeFrame[],
+  ) => {
     const ctx = audioCtxRef.current!
     const src = ctx.createBufferSource()
     src.buffer = buf
     src.connect(ctx.destination)
 
-    if (queueClearedRef.current) return
+    if (generation !== audioGenerationRef.current) return
 
     const now = ctx.currentTime
-    if (playbackTimeRef.current < now) playbackTimeRef.current = now + 0.02
+    // 最初の音声にもUEへ口形列を届ける時間を確保する。
+    if (playbackTimeRef.current < now) playbackTimeRef.current = now + 0.12
 
     if (currentAssistantIdRef.current) {
       setSpeakingMessageId(currentAssistantIdRef.current)
     }
 
-    src.start(playbackTimeRef.current)
+    const scheduledStart = playbackTimeRef.current
+    void sendVisemeTimeline(
+      visemes,
+      (scheduledStart - ctx.currentTime) * 1000,
+      generation,
+    )
+    src.start(scheduledStart)
     playbackTimeRef.current += buf.duration
 
     src.onended = () => {
       const checkDelay = 600
       setTimeout(() => {
+        if (generation !== audioGenerationRef.current) return
         const elapsed = Date.now() - lastAudioChunkTimeRef.current
         const remaining = playbackTimeRef.current - ctx.currentTime
         if (elapsed > checkDelay && remaining <= 0.5) {
@@ -131,15 +226,20 @@ export function useTextChat(endpoint: string) {
     }
   }
 
-  const handleAudioChunk = async (base64: string) => {
+  const handleAudioChunk = async (
+    base64: string,
+    visemes: VisemeFrame[] = [],
+  ) => {
     ensureAudioReady()
     const ctx = audioCtxRef.current!
+    const generation = audioGenerationRef.current
     lastAudioChunkTimeRef.current = Date.now()
 
     try {
       const arr = b64ToArrayBuffer(base64)
       const audioBuffer = await ctx.decodeAudioData(arr.slice(0))
-      enqueueAudioBuffer(audioBuffer)
+      if (generation !== audioGenerationRef.current) return
+      enqueueAudioBuffer(audioBuffer, generation, visemes)
       if (currentAssistantIdRef.current) {
         setSpeakingMessageId(currentAssistantIdRef.current)
       }
@@ -150,7 +250,8 @@ export function useTextChat(endpoint: string) {
         ensureAudioReady()
         const arr = b64ToArrayBuffer(base64)
         const audioBuffer = await ctx.decodeAudioData(arr.slice(0))
-        enqueueAudioBuffer(audioBuffer)
+        if (generation !== audioGenerationRef.current) return
+        enqueueAudioBuffer(audioBuffer, generation, visemes)
       } catch (e2) {
         console.error('再試行でも失敗:', e2)
       }
@@ -158,15 +259,15 @@ export function useTextChat(endpoint: string) {
   }
 
   const stopAllAudio = () => {
+    audioGenerationRef.current += 1
     const ctx = audioCtxRef.current
-    if (!ctx) return
-    queueClearedRef.current = true
-    ctx.close().catch(() => { })
+    if (ctx) ctx.close().catch(() => { })
     audioCtxRef.current = null
     playbackTimeRef.current = 0
+    audioDecodeQueueRef.current = Promise.resolve()
     currentAssistantIdRef.current = null
     setSpeakingMessageId(null)
-    setTimeout(() => (queueClearedRef.current = false), 100)
+    void setLipSyncActive(false)
   }
 
   const interruptChat = () => {
@@ -178,9 +279,19 @@ export function useTextChat(endpoint: string) {
   }
 
   // ==========================================
-  const startChat = (userText: string, mode: string = 'general') => {
+  const startChat = (
+    userText: string,
+    mode: string = 'general',
+    fillerMode: string = 'dynamic',
+    llmModel?: string,
+    fillerModel?: string,
+    lipSyncMode: LipSyncMode = 'legacy',
+  ) => {
     // 新しい会話のたびにオーディオはリセット
     stopAllAudio()
+    // 直前の stop と新しい start が前後しても、新しい発話を消さないようIDを分ける。
+    lipSyncClientIdRef.current = crypto.randomUUID()
+    lipSyncModeRef.current = lipSyncMode
     setLatestUrl(null)
 
     // ユーザーメッセージ追加
@@ -192,11 +303,15 @@ export function useTextChat(endpoint: string) {
     // 既存 SSE を閉じる
     eventSourceRef.current?.close()
 
-    // ★ FastAPI 直叩き用のベースURL
-    const apiBase =
-      process.env.NEXT_PUBLIC_API_BASE_URL ??
-      'http://localhost:8076' // dev デフォルト
-    const fullUrl = `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}&mode=${mode}`
+    // NEXT_PUBLIC_API_BASE_URL が空なら相対URL（nginx経由）、設定があればそれを使う
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+    // モデル選択が指定されていればクエリに付与（未指定ならバックエンド既定モデル）
+    const modelParams =
+      (llmModel ? `&llm_model=${encodeURIComponent(llmModel)}` : '') +
+      (fillerModel ? `&filler_model=${encodeURIComponent(fillerModel)}` : '')
+    const fullUrl = apiBase
+      ? `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}&mode=${mode}&filler_mode=${fillerMode}${modelParams}`
+      : `${endpoint}?text=${encodeURIComponent(userText)}&mode=${mode}&filler_mode=${fillerMode}${modelParams}`
 
     console.log('[useTextChat] SSE connect to:', fullUrl)
 
@@ -239,7 +354,18 @@ export function useTextChat(endpoint: string) {
 
         // 🟦 音声チャンク
         if (data.type === 'audio_chunk') {
-          if (data.audio) handleAudioChunk(data.audio)
+          if (data.audio) {
+            const generation = audioGenerationRef.current
+            // decodeAudioData の完了順が前後しても、発話と口形の順序はSSE順を保つ。
+            audioDecodeQueueRef.current = audioDecodeQueueRef.current
+              .then(async () => {
+                if (generation !== audioGenerationRef.current) return
+                await handleAudioChunk(data.audio, data.visemes ?? [])
+              })
+              .catch((error) => {
+                console.error('音声キュー処理失敗:', error)
+              })
+          }
           return
         }
 
@@ -298,35 +424,29 @@ export function useTextChat(endpoint: string) {
 
   // ==========================================
 
-  const isSpeakingRef = useRef<boolean>(false)
-
   useEffect(() => {
-    const triggerLipSync = async (action: 'start' | 'stop') => {
-      try {
-        // Nginx および Next.js dev サーバーのプロキシを経由してアクセス (HTTPSのMixed Content対策)
-        const url = `/lip-sync/${action}`
-        // proxy 経由なので同生成元 (CORS 不要)
-        await fetch(url)
-        console.log(`[LipSync] ${action}`)
-      } catch (e) {
-        console.error(`[LipSync] failed to ${action}:`, e)
-      }
+    // speakingMessageId は最初の音声バッファを再生するときに設定され、
+    // 最後のバッファが終わると null になる。テキスト生成中ではなく、
+    // 実際に端末から音声が出ている区間だけ口パクを有効にする。
+    if (speakingMessageId === null) {
+      void setLipSyncActive(false)
+      return
     }
 
-    if (speakingMessageId) {
-      if (!isSpeakingRef.current) {
-        isSpeakingRef.current = true
-        triggerLipSync('start')
-      }
-    } else {
-      if (isSpeakingRef.current) {
-        isSpeakingRef.current = false
-        triggerLipSync('stop')
-      }
-    }
+    // UE側のリースを更新する。タブが異常終了して更新が止まれば、UEが自動で
+    // ニュートラルへ戻すため「口が動きっぱなし」にならない。
+    void setLipSyncActive(true)
+    const heartbeat = window.setInterval(() => {
+      void setLipSyncActive(true, true)
+    }, 2_000)
+
+    return () => window.clearInterval(heartbeat)
   }, [speakingMessageId])
 
   useEffect(() => {
+    // 前回、発話中にタブを閉じた場合でも必ずニュートラルから開始する。
+    void setLipSyncActive(false, true)
+
     const onUserInteract = () => {
       ensureAudioReady()
       window.removeEventListener('click', onUserInteract)
@@ -337,13 +457,23 @@ export function useTextChat(endpoint: string) {
     window.addEventListener('keydown', onUserInteract)
     window.addEventListener('touchstart', onUserInteract)
 
+    const onPageHide = () => {
+      stopAllAudio()
+      void setLipSyncActive(false, true)
+    }
+    window.addEventListener('pagehide', onPageHide)
+
     return () => {
       eventSourceRef.current?.close()
       stopAllAudio()
+      void setLipSyncActive(false, true)
       window.removeEventListener('click', onUserInteract)
       window.removeEventListener('keydown', onUserInteract)
       window.removeEventListener('touchstart', onUserInteract)
+      window.removeEventListener('pagehide', onPageHide)
     }
+    // イベントリスナーはマウント中に一度だけ登録する。参照する状態は全て ref。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return {

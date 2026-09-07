@@ -422,14 +422,38 @@ _RE_MD_LINK = re.compile(r"\[([^\]]+)\]\([^\)]+\)")
 _RE_MD_BOLD = re.compile(r"\*\*([^*]+)\*\*")
 _RE_MD_BULLET = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
 
+# スキーム(http)も括弧も無いベアドメイン（例: kanazawa-it.ac.jp, www.example.com, foo.co.jp/bar）。
+# 「Node.js」などの誤爆を避けるため、TLD は既知のものに限定する（長い複合TLDを先に並べる）。
+_TLD = (
+    r"(?:ac\.jp|co\.jp|go\.jp|ne\.jp|or\.jp|ed\.jp|lg\.jp|gr\.jp|"
+    r"jp|com|net|org|info|biz|edu|gov|io|ai|co|dev|app)"
+)
+_RE_BARE_URL = re.compile(
+    r"(?:https?://|www\.)?"
+    r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+"
+    + _TLD
+    # パス/クエリはURL安全なASCII文字のみ（日本語は消さず、?x=1 等のクエリは消す）
+    + r"(?:/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%\[\]]*)?",
+    re.IGNORECASE,
+)
+# ドメイン除去後に残る空括弧
+_RE_EMPTY_PAREN = re.compile(r"[（(]\s*[）)]")
+
 
 def _sanitize_for_speech(text: str) -> str:
-    """音声読み上げ向けにURL・出典・マークダウンを除去する"""
-    text = _RE_URL.sub("", text)
-    text = _RE_PAREN_DOMAIN.sub("", text)
+    """音声読み上げ・表示向けにURL・出典・マークダウンを除去する"""
+    # マークダウンリンク [表示テキスト](URL) は先に表示テキストだけ残す
     text = _RE_MD_LINK.sub(r"\1", text)
+    # http(s):// のフルURL
+    text = _RE_URL.sub("", text)
+    # （ドメイン）形式の出典表記
+    text = _RE_PAREN_DOMAIN.sub("", text)
+    # スキーム/括弧の無いベアドメイン（kanazawa-it.ac.jp 等）
+    text = _RE_BARE_URL.sub("", text)
     text = _RE_MD_BOLD.sub(r"\1", text)
     text = _RE_MD_BULLET.sub("", text)
+    # 除去後に残る空括弧を削除
+    text = _RE_EMPTY_PAREN.sub("", text)
     # 連続空白・改行を圧縮
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"  +", " ", text)
@@ -452,6 +476,20 @@ def _append_benchmark_log(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+
+def _synthesize_audio_packet(tts_model, text: str) -> dict:
+    """TTS音声と、同一推論由来のビセーム(口形)列を返す。
+
+    リップシンクはこの列を UE のコマンドサーバへ送って口を動かすため、
+    文字数による均等割りではなく実際の発話長と一致している必要がある。
+    ビセーム対応のTTSでない場合は音声のみを返し、口パクは従来動作に落ちる。
+    """
+    synthesize_aligned = getattr(tts_model, "synthesize_with_visemes_to_base64", None)
+    if callable(synthesize_aligned):
+        return synthesize_aligned(text)
+    return {"audio": tts_model.synthesize_to_base64(text), "visemes": []}
+
+
 @router.get("/char-stream-orchestrator")
 async def char_stream_orchestrator(request: Request):
     t0 = time.perf_counter()  # === 計測開始 ===
@@ -461,6 +499,10 @@ async def char_stream_orchestrator(request: Request):
     mode = request.query_params.get("mode", "general")
     filler_enabled_str = request.query_params.get("filler_enabled", "true").lower()
     filler_mode_str = request.query_params.get("filler_mode", None)
+
+    # モデル選択（オプション）: 指定が無ければ orchestrator の既定モデルを使う
+    llm_model = request.query_params.get("llm_model", None)
+    filler_model = request.query_params.get("filler_model", None)
     
     if filler_mode_str:
         filler_mode = filler_mode_str.lower()
@@ -524,6 +566,8 @@ async def char_stream_orchestrator(request: Request):
             mode=mode,
             filler_mode=filler_mode,
             timing_data=timing_data,
+            llm_model=llm_model,
+            filler_model=filler_model,
         ):
             raw_piece = str(chunk)
             sentence_buffer += raw_piece
@@ -578,10 +622,11 @@ async def char_stream_orchestrator(request: Request):
                 if first_sentence_ms is None:
                     first_sentence_ms = (time.perf_counter() - t0) * 1000
 
-                # 並列で音声生成
+                # 並列で音声生成（リップシンク用のビセーム列も同時に得る）
                 tts_start = time.perf_counter()
-                audio_b64 = await asyncio.to_thread(
-                    _tts.synthesize_to_base64,
+                audio_packet = await asyncio.to_thread(
+                    _synthesize_audio_packet,
+                    _tts,
                     current_sentence,
                 )
                 if tts_duration_ms is None:
@@ -593,7 +638,7 @@ async def char_stream_orchestrator(request: Request):
                         {
                             "type": "audio_chunk",
                             "sentence": current_sentence,
-                            "audio": audio_b64,
+                            **audio_packet,
                         }
                     )
                     + "\n\n"
@@ -639,8 +684,9 @@ async def char_stream_orchestrator(request: Request):
                     + json.dumps({"type": "text_chunk", "content": current_sentence})
                     + "\n\n"
                 )
-                audio_b64 = await asyncio.to_thread(
-                    _tts.synthesize_to_base64,
+                audio_packet = await asyncio.to_thread(
+                    _synthesize_audio_packet,
+                    _tts,
                     current_sentence,
                 )
                 yield (
@@ -649,7 +695,7 @@ async def char_stream_orchestrator(request: Request):
                         {
                             "type": "audio_chunk",
                             "sentence": current_sentence,
-                            "audio": audio_b64,
+                            **audio_packet,
                         }
                     )
                     + "\n\n"
@@ -688,6 +734,8 @@ async def char_stream_orchestrator(request: Request):
             "classifier_ms": round(timing_data.get("classifier_ms")) if timing_data.get("classifier_ms") is not None else None,
             "route": timing_data.get("route"),
             "main_responded_in_time": timing_data.get("main_responded_in_time"),
+            "model_filler_fired": timing_data.get("model_filler_fired"),
+            "model_filler_text": timing_data.get("model_filler_text", ""),
         }
         yield (
             "data: "

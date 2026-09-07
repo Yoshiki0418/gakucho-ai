@@ -5,7 +5,7 @@ from typing import AsyncIterator, Optional
 from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.agent.modules.decision_module import LLMDecisionClassifier
 from app.agent.modules.rag_module import RAGModule
-from app.models.llm import BaseLLM
+from app.models.llm import BaseLLM, OpenAILLM
 from app.agent.baseline_agent import BaselineAgent
 
 
@@ -17,12 +17,33 @@ class ResponseOrchestrator:
         filler_llm: BaseLLM,  # フィラー用 LLM クライアント
         classifier_llm: LLMDecisionClassifier,  # 2値分類用 LLM
         filler_timeout: float = 1.0,  # 本応答の「最初のトークン待ち時間」
+        filler_mode: str = "dynamic",  # 実験条件: "dynamic"(=external) / "static" / "none"(=off) / "endogenous"
+        filler_system_prompt: str = "",  # フィラー用システムプロンプト（別モデル指定時の再生成に使用）
     ) -> None:
         self.rag_engine = rag_engine
         self.daily_agent = daily_agent
         self.filler_llm = filler_llm
         self.classifier_llm = classifier_llm
         self.filler_timeout = filler_timeout
+        self.filler_mode = filler_mode
+        self.filler_system_prompt = filler_system_prompt
+
+    def _resolve_filler_llm(self, filler_model: str | None = None) -> BaseLLM:
+        """filler_model 指定に応じてフィラー用 LLM を返す。
+
+        指定が無い / 既定モデルと同じ / システムプロンプト未設定の場合は
+        事前生成済みの self.filler_llm を使う。別モデル指定時のみ、同じ
+        フィラー用システムプロンプトで新しい OpenAILLM を生成して返す。
+        """
+        if not filler_model or not self.filler_system_prompt:
+            return self.filler_llm
+        current = getattr(self.filler_llm, "_model_name", None)
+        if filler_model == current:
+            return self.filler_llm
+        return OpenAILLM(
+            system_prompt=self.filler_system_prompt,
+            model_name=filler_model,
+        )
 
     # --- RAG ルート処理 ---
     async def handle_rag(
@@ -260,16 +281,20 @@ class ResponseOrchestrator:
         )
 
     async def _start_filler_producer(
-        self, text: str, history: list[dict] | None = None
+        self,
+        text: str,
+        history: list[dict] | None = None,
+        filler_llm: BaseLLM | None = None,
     ) -> asyncio.Queue:
         """フィラー LLM のストリームをキューに流すプロデューサを起動"""
         queue: asyncio.Queue = asyncio.Queue()
+        _filler_llm = filler_llm or self.filler_llm
 
         async def producer():
             try:
                 if self._is_pure_greeting(text):
                     return
-                async for piece in self.filler_llm.stream_generate(
+                async for piece in _filler_llm.stream_generate(
                     message=text,
                     history=history,
                     tool_calls=None,
@@ -327,6 +352,8 @@ class ResponseOrchestrator:
         mode: str = "general",
         filler_mode: str = "dynamic",
         timing_data: dict | None = None,
+        llm_model: str | None = None,
+        filler_model: str | None = None,
     ) -> AsyncIterator[str]:
         """
         FastAPI / SSE / WebSocket からはこのメソッドだけ利用。
@@ -338,7 +365,8 @@ class ResponseOrchestrator:
         - フィラー出力後に Classifier 結果をチェックし RAG/dialogue を判定
 
         Args:
-            filler_mode: "dynamic" (提案手法), "static" (固定音声比較用), "off" (フィラー無効化)
+            filler_mode: "dynamic"/"external" (外部動的フィラー), "static" (固定フィラー),
+                         "off"/"none" (フィラー無効), "endogenous" (親エージェント自己判断フィラー)
             timing_data: 計測結果を格納する辞書。呼び出し側が空の dict を渡すと
                          各種タイミング情報が書き込まれる。
         """
@@ -367,13 +395,23 @@ class ResponseOrchestrator:
         )
 
         # フィラーをキュー経由でストリーミング（バックグラウンド開始）
-        enable_filler = (filler_mode != "off") and (mode != "ceremony") and not self._is_pure_greeting(text)
+        # "endogenous" と "none"(="off") は外部フィラーを起動しない
+        enable_filler = (
+            filler_mode not in ("off", "none", "endogenous")
+            and mode != "ceremony"
+            and not self._is_pure_greeting(text)
+        )
         filler_queue = None
         if enable_filler:
             if filler_mode == "static":
                 filler_queue = await self._start_static_filler_producer(text)
             else:
-                filler_queue = await self._start_filler_producer(text, history=history)
+                # "dynamic" / "external" → 外部動的フィラー
+                # filler_model 指定があればそのモデルでフィラーLLMを差し替える
+                _filler_llm = self._resolve_filler_llm(filler_model)
+                filler_queue = await self._start_filler_producer(
+                    text, history=history, filler_llm=_filler_llm
+                )
 
         # Main を dialogue 前提で先行起動
         if mode == "baseline":
@@ -389,6 +427,9 @@ class ResponseOrchestrator:
                 message=text,
                 history=history,
                 mode=mode,
+                filler_mode=filler_mode,
+                timing_data=_td,
+                llm_model=llm_model,
             ).__aiter__()
         
         main_first_task = asyncio.create_task(main_iter.__anext__())
