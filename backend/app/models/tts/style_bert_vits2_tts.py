@@ -1,5 +1,6 @@
 import base64
 import io
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -77,6 +78,14 @@ class StyleBertVITS2_TTS(BaseTTS):
         # ========== デバイス設定 ==========
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
+        elif device.startswith("cuda") and not torch.cuda.is_available():
+            raise RuntimeError(
+                "TTS_DEVICE=cuda が指定されていますが CUDA を初期化できません。"
+                f" PyTorch CUDA={torch.version.cuda},"
+                f" NVIDIA_VISIBLE_DEVICES={os.getenv('NVIDIA_VISIBLE_DEVICES', '(未設定)')}。"
+                " ホストで nvidia-smi を確認し、Driver/library version mismatch の場合は"
+                " NVIDIA ドライバ更新後にホストを再起動してください。"
+            )
 
         # ========== BERT トークナイザ設定 ==========
         self._setup_bert_tokenizer()

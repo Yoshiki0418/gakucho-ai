@@ -24,9 +24,13 @@ def create_llm(provider: str, system_prompt: str, model_name: str = None) -> Bas
         raise ValueError(f"Unknown LLM provider: {provider}")
 
 
-def create_tts(provider: str, model_dir: str):
+def create_tts(provider: str, model_dir: str = None, device: str = None):
+    model_dir = model_dir or os.getenv(
+        "TTS_MODEL_DIR", "/workspace/backend/app/weights/tts/gakucho_ai_v2"
+    )
+    device = device or os.getenv("TTS_DEVICE") or None
     if provider == "style-bert-vits2":
-        return StyleBertVITS2_TTS(model_dir=model_dir)
+        return StyleBertVITS2_TTS(model_dir=model_dir, device=device)
     else:
         raise ValueError(f"Unknown TTS provider: {provider}")
 
@@ -35,6 +39,7 @@ def load_models_from_env() -> Tuple[object, object]:
     llm_provider = os.getenv("LLM_PROVIDER", "openai")
     llm_model_name = os.getenv("LLM_MODEL_NAME", "gpt-5.2")
     tts_provider = os.getenv("TTS_PROVIDER", "style-bert-vits2")
+    tts_device = os.getenv("TTS_DEVICE") or None
 
     prompt_path = os.getenv(
         "LLM_SYSTEM_PROMPT_PATH", "/workspace/backend/app/prompts/system_prompt.txt"
@@ -45,5 +50,5 @@ def load_models_from_env() -> Tuple[object, object]:
     system_prompt = read_prompt_from_file(prompt_path)
 
     llm = create_llm(llm_provider, system_prompt, llm_model_name)
-    tts = create_tts(tts_provider, tts_path)
+    tts = create_tts(tts_provider, tts_path, tts_device)
     return llm, tts

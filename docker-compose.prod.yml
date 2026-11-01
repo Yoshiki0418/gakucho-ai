@@ -70,6 +70,9 @@ services:
       - PYTHONPATH=/workspace
       - LLM_SYSTEM_PROMPT_PATH=/workspace/app/prompts/system_prompt.txt
       - TTS_MODEL_DIR=/workspace/app/weights/tts/gakucho_ai_v2
+      # 本番では CPU への暗黙フォールバックを禁止する。GPU 障害時は起動を失敗させ、
+      # 遅いまま healthy になる状態を防ぐ。
+      - TTS_DEVICE=cuda
       - TZ=Asia/Tokyo
     depends_on:
       db:
