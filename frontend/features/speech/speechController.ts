@@ -205,6 +205,10 @@ export function createSpeechController(callbacks: SpeechCallbacks, deps: SpeechD
             method: 'POST', body: form, signal: request.signal,
           })
           if (token !== generation) return
+          if (response.status === 413) {
+            report(token, '録音データが大きすぎます。8 MiB以下になるよう短く録音してください。')
+            return
+          }
           const result = await response.json()
           if (token !== generation) return
           if (!response.ok) {

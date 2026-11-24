@@ -153,6 +153,21 @@ test('recording stops before the server duration limit and releases its micropho
   assert.equal(f.timers.size, 0)
 })
 
+test('a proxy HTML 413 reports the upload limit without trying to parse JSON', async () => {
+  const f = controllerFixture({ fetch: async () => ({
+    ok: false, status: 413,
+    json: async () => { assert.fail('HTML error response must not be parsed as JSON') },
+  }) })
+  await f.controller.start('whisper-base')
+  f.controller.finish()
+  await f.recorder.pendingStop
+  assert.equal(f.events.results.length, 0)
+  assert.equal(f.events.errors.length, 1)
+  assert.match(f.events.errors[0], /8 MiB/)
+  assert.equal(f.events.tracksStopped, 1)
+  assert.equal(f.events.phases.at(-1), 'idle')
+})
+
 test('recorder failure and oversized chunks release the microphone without upload', async () => {
   let stopped = 0
   const broken = controllerFixture({
