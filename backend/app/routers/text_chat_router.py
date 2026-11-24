@@ -1,10 +1,10 @@
 import asyncio
 import datetime
-import os
 
 # import base64
 # import io
 import json
+import os
 import re
 import time
 
@@ -429,9 +429,7 @@ _TLD = (
     r"jp|com|net|org|info|biz|edu|gov|io|ai|co|dev|app)"
 )
 _RE_BARE_URL = re.compile(
-    r"(?:https?://|www\.)?"
-    r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+"
-    + _TLD
+    r"(?:https?://|www\.)?" r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+" + _TLD
     # パス/クエリはURL安全なASCII文字のみ（日本語は消さず、?x=1 等のクエリは消す）
     + r"(?:/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%\[\]]*)?",
     re.IGNORECASE,
@@ -463,7 +461,8 @@ def _sanitize_for_speech(text: str) -> str:
 # --- ベンチマークログ保存用ディレクトリ ---
 _BENCHMARK_LOG_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "data", "benchmark_logs",
+    "data",
+    "benchmark_logs",
 )
 
 
@@ -474,7 +473,6 @@ def _append_benchmark_log(entry: dict) -> None:
     filepath = os.path.join(_BENCHMARK_LOG_DIR, f"benchmark_{today}.jsonl")
     with open(filepath, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
 
 
 def _synthesize_audio_packet(tts_model, text: str) -> dict:
@@ -503,14 +501,16 @@ async def char_stream_orchestrator(request: Request):
     # モデル選択（オプション）: 指定が無ければ orchestrator の既定モデルを使う
     llm_model = request.query_params.get("llm_model", None)
     filler_model = request.query_params.get("filler_model", None)
-    
+
     if filler_mode_str:
         filler_mode = filler_mode_str.lower()
     else:
         # 後方互換性
         filler_mode = "dynamic" if filler_enabled_str == "true" else "off"
-        
-    benchmark_mode = request.query_params.get("benchmark_mode", "false").lower() == "true"
+
+    benchmark_mode = (
+        request.query_params.get("benchmark_mode", "false").lower() == "true"
+    )
 
     # --- 対話履歴の取得 ---
     history = []
@@ -723,25 +723,41 @@ async def char_stream_orchestrator(request: Request):
             "total_ms": round(total_ms),
             "ttft_ms": round(ttft_ms) if ttft_ms is not None else None,
             "ttfa_ms": round(ttfa_ms) if ttfa_ms is not None else None,
-            "ttmr_ms": round(timing_data.get("ttmr_ms")) if timing_data.get("ttmr_ms") is not None else None,
-            "first_sentence_ms": round(first_sentence_ms) if first_sentence_ms is not None else None,
-            "tts_duration_ms": round(tts_duration_ms) if tts_duration_ms is not None else None,
+            "ttmr_ms": (
+                round(timing_data.get("ttmr_ms"))
+                if timing_data.get("ttmr_ms") is not None
+                else None
+            ),
+            "first_sentence_ms": (
+                round(first_sentence_ms) if first_sentence_ms is not None else None
+            ),
+            "tts_duration_ms": (
+                round(tts_duration_ms) if tts_duration_ms is not None else None
+            ),
             "filler_mode": timing_data.get("filler_mode"),
             "filler_fired": timing_data.get("filler_fired", False),
             "filler_text": timing_data.get("filler_text", ""),
-            "filler_ttfb_ms": round(timing_data.get("filler_ttfb_ms")) if timing_data.get("filler_ttfb_ms") is not None else None,
-            "filler_duration_ms": round(timing_data.get("filler_duration_ms")) if timing_data.get("filler_duration_ms") is not None else None,
-            "classifier_ms": round(timing_data.get("classifier_ms")) if timing_data.get("classifier_ms") is not None else None,
+            "filler_ttfb_ms": (
+                round(timing_data.get("filler_ttfb_ms"))
+                if timing_data.get("filler_ttfb_ms") is not None
+                else None
+            ),
+            "filler_duration_ms": (
+                round(timing_data.get("filler_duration_ms"))
+                if timing_data.get("filler_duration_ms") is not None
+                else None
+            ),
+            "classifier_ms": (
+                round(timing_data.get("classifier_ms"))
+                if timing_data.get("classifier_ms") is not None
+                else None
+            ),
             "route": timing_data.get("route"),
             "main_responded_in_time": timing_data.get("main_responded_in_time"),
             "model_filler_fired": timing_data.get("model_filler_fired"),
             "model_filler_text": timing_data.get("model_filler_text", ""),
         }
-        yield (
-            "data: "
-            + json.dumps(timing_payload)
-            + "\n\n"
-        )
+        yield ("data: " + json.dumps(timing_payload) + "\n\n")
 
         # --- ベンチマークモード: JSONL にログ追記 ---
         if benchmark_mode:

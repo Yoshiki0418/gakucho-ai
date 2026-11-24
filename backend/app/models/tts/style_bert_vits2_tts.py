@@ -14,15 +14,14 @@ import soundfile as sf
 import style_bert_vits2.models.infer as infer_module
 import style_bert_vits2.nlp.bert_models as bert_models
 import torch
-from style_bert_vits2.models import commons
-from style_bert_vits2.nlp import clean_text
 from style_bert_vits2.constants import (
-    DEFAULT_LENGTH,
     DEFAULT_NOISE,
     DEFAULT_NOISEW,
     DEFAULT_SDP_RATIO,
     Languages,
 )
+from style_bert_vits2.models import commons
+from style_bert_vits2.nlp import clean_text
 from style_bert_vits2.tts_model import TTSModel
 
 from .base_tts import BaseTTS
@@ -271,7 +270,11 @@ class StyleBertVITS2_TTS(BaseTTS):
             viseme = base_visemes[index]
             if viseme is None:
                 previous = next(
-                    (v for v in reversed(base_visemes[:index]) if v not in (None, "sil")),
+                    (
+                        v
+                        for v in reversed(base_visemes[:index])
+                        if v not in (None, "sil")
+                    ),
                     None,
                 )
                 following = next(

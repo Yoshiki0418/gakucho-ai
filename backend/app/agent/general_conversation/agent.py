@@ -6,7 +6,6 @@ from agents import Agent, Runner
 from app.agent.general_conversation.domains import (
     LifePlanningAgent,
     LocationAgent,
-    PresidentAgent,
     ResearchAgent,
 )
 from app.agent.general_conversation.tools import get_current_time, get_weather
@@ -178,7 +177,9 @@ class GeneralConversationAgent:
         self.general_agent_endogenous = Agent(
             name="GeneralConversationAgent",
             model="gpt-5.2",
-            instructions=self.general_agent.instructions + "\n" + ENDOGENOUS_FILLER_INSTRUCTION,
+            instructions=self.general_agent.instructions
+            + "\n"
+            + ENDOGENOUS_FILLER_INSTRUCTION,
             tools=[get_current_time, get_weather],
             handoffs=[
                 research_agent,
@@ -240,7 +241,9 @@ class GeneralConversationAgent:
         self.ceremony_agent_endogenous = Agent(
             name="CeremonyConversationAgent",
             model="gpt-5.2",
-            instructions=self.ceremony_agent.instructions + "\n" + CEREMONY_ENDOGENOUS_FILLER_INSTRUCTION,
+            instructions=self.ceremony_agent.instructions
+            + "\n"
+            + CEREMONY_ENDOGENOUS_FILLER_INSTRUCTION,
             tools=[get_current_time, get_weather],
             handoffs=[],
         )
@@ -279,14 +282,19 @@ class GeneralConversationAgent:
         )
 
     async def generate(
-        self, user_id: str, message: str, history: list[dict] | None = None, mode: str = "general", **kwargs
+        self,
+        user_id: str,
+        message: str,
+        history: list[dict] | None = None,
+        mode: str = "general",
+        **kwargs,
     ) -> str:
         # 履歴がある場合はメッセージリスト形式で渡す
         if history:
             input_messages = history + [{"role": "user", "content": message}]
         else:
             input_messages = message
-        
+
         target_agent = self.ceremony_agent if mode == "ceremony" else self.general_agent
         result = await Runner.run(target_agent, input_messages)
         return result.final_output
@@ -325,9 +333,8 @@ class GeneralConversationAgent:
             if not (event.type == "raw_response_event" and hasattr(event.data, "type")):
                 continue
 
-            if (
-                event.data.type == "response.output_text.delta"
-                and hasattr(event.data, "delta")
+            if event.data.type == "response.output_text.delta" and hasattr(
+                event.data, "delta"
             ):
                 delta = event.data.delta
                 if delta:

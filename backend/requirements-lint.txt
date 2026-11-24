@@ -1,0 +1,6 @@
+pysen==0.12.1
+black==26.10.1
+flake8==7.4.1
+pycodestyle==2.15.0
+pyflakes==4.0.3
+isort==5.13.2

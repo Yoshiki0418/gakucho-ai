@@ -1,17 +1,17 @@
 import argparse
-import csv
 import json
 import os
 import sys
 import time
 import urllib.request
-from datetime import datetime
 from pathlib import Path
 
 try:
     import pandas as pd
 except ImportError:
-    print("エラー: pandas がインストールされていません。'pip install pandas' を実行してください。")
+    print(
+        "エラー: pandas がインストールされていません。'pip install pandas' を実行してください。"
+    )
     sys.exit(1)
 
 # プロンプトの定義
@@ -58,32 +58,34 @@ SYSTEM_PROMPT = """あなたはAI対話システムの品質評価を行う専�
 }
 """
 
-def evaluate_filler(api_key: str, query: str, filler: str, response: str, model: str = "gpt-4o") -> dict:
+
+def evaluate_filler(
+    api_key: str, query: str, filler: str, response: str, model: str = "gpt-4o"
+) -> dict:
     """OpenAI API (REST) を呼び出してフィラーを評価する"""
     url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-    
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+
     user_message = (
         f"【Query】\n{query}\n\n"
         f"【Filler】\n{filler}\n\n"
         f"【Main Response】\n{response}"
     )
-    
+
     data = {
         "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": user_message},
         ],
         "response_format": {"type": "json_object"},
-        "temperature": 0.3
+        "temperature": 0.3,
     }
-    
-    req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
-    
+
+    req = urllib.request.Request(
+        url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST"
+    )
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -99,13 +101,18 @@ def evaluate_filler(api_key: str, query: str, filler: str, response: str, model:
                     "naturalness": err_dict,
                     "appropriateness": err_dict,
                     "smoothness": err_dict,
-                    "persona_consistency": err_dict
+                    "persona_consistency": err_dict,
                 }
-            time.sleep(2) # リトライ待機
+            time.sleep(2)  # リトライ待機
+
 
 def main():
-    parser = argparse.ArgumentParser(description="LLM-as-a-Judge: フィラー品質の自動評価")
-    parser.add_argument("--input", required=True, help="評価対象のベンチマークCSVファイルのパス")
+    parser = argparse.ArgumentParser(
+        description="LLM-as-a-Judge: フィラー品質の自動評価"
+    )
+    parser.add_argument(
+        "--input", required=True, help="評価対象のベンチマークCSVファイルのパス"
+    )
     parser.add_argument("--model", default="gpt-4o", help="評価に使用するOpenAIモデル")
     args = parser.parse_args()
 
@@ -116,9 +123,9 @@ def main():
             with open(env_path, "r", encoding="utf-8") as f:
                 for line in f:
                     if line.startswith("OPENAI_API_KEY="):
-                        api_key = line.strip().split("=", 1)[1].strip('"\'')
+                        api_key = line.strip().split("=", 1)[1].strip("\"'")
                         break
-    
+
     if not api_key:
         print("エラー: OPENAI_API_KEY が設定されていません。")
         sys.exit(1)
@@ -129,14 +136,18 @@ def main():
         print(f"CSV読み込みエラー: {e}")
         sys.exit(1)
 
-    target_mask = (df["filler_fired"].astype(str).str.lower() == "true") & (df["filler_text"].notna()) & (df["filler_text"] != "")
+    target_mask = (
+        (df["filler_fired"].astype(str).str.lower() == "true")
+        & (df["filler_text"].notna())
+        & (df["filler_text"] != "")
+    )
     eval_df = df[target_mask].copy()
-    
+
     total = len(eval_df)
     if total == 0:
         print("評価対象となるフィラー生成データがありません。")
         sys.exit(0)
-        
+
     print(f"入力ファイル: {args.input}")
     print(f"評価対象データ数: {total}件")
     print("-" * 50)
@@ -147,26 +158,31 @@ def main():
 
     try:
         from tqdm import tqdm
+
         iterator = tqdm(eval_df.iterrows(), total=total, desc="Evaluating")
     except ImportError:
+
         def simple_iterator(df):
             for i, (idx, row) in enumerate(df.iterrows(), 1):
                 print(f"Evaluating {i}/{total} ...", end="\r")
                 yield idx, row
             print()
+
         iterator = simple_iterator(eval_df)
 
     for idx, row in iterator:
         query = str(row.get("query", ""))
         filler = str(row.get("filler_text", ""))
         response = str(row.get("response_text", ""))
-        
+
         result = evaluate_filler(api_key, query, filler, response, args.model)
-        
+
         for m in metrics:
             results_dict[f"{m}_score"].append(result.get(m, {}).get("score", 0))
-            results_dict[f"{m}_rationale"].append(result.get(m, {}).get("rationale", ""))
-        
+            results_dict[f"{m}_rationale"].append(
+                result.get(m, {}).get("rationale", "")
+            )
+
         time.sleep(0.5)
 
     for key, values in results_dict.items():
@@ -175,41 +191,43 @@ def main():
     result_df = df.copy()
     for key in results_dict.keys():
         result_df[key] = None
-    
+
     result_df.update(eval_df)
 
     input_path = Path(args.input)
     output_filename = f"{input_path.stem}_evaluated{input_path.suffix}"
     output_path = input_path.parent / output_filename
-    
+
     result_df.to_csv(output_path, index=False, encoding="utf-8-sig")
-    
+
     print("-" * 50)
     print("評価完了！")
     print(f"結果保存先: {output_path}")
     print("\n【条件別サマリ (Mean Scores) & Mann-Whitney U検定】")
     try:
         from scipy.stats import mannwhitneyu
+
         has_scipy = True
     except ImportError:
         has_scipy = False
 
     for m in metrics:
-        name = m.replace('_', ' ').title()
+        name = m.replace("_", " ").title()
         print(f"\n--- {name} ---")
-        
+
         dyn = eval_df[eval_df["condition"] == "dynamic_filler"][f"{m}_score"].dropna()
         sta = eval_df[eval_df["condition"] == "static_filler"][f"{m}_score"].dropna()
-        
+
         dyn_mean = dyn.mean() if not dyn.empty else 0
         sta_mean = sta.mean() if not sta.empty else 0
-        
+
         print(f"  dynamic_filler (n={len(dyn)}): {dyn_mean:.2f} / 5.0")
         print(f"  static_filler  (n={len(sta)}): {sta_mean:.2f} / 5.0")
-        
+
         if has_scipy and len(dyn) > 0 and len(sta) > 0:
-            stat, p = mannwhitneyu(dyn, sta, alternative='greater')
+            stat, p = mannwhitneyu(dyn, sta, alternative="greater")
             print(f"  U-test p-value: {p:.3e} {'(Significant!)' if p < 0.05 else ''}")
+
 
 if __name__ == "__main__":
     main()

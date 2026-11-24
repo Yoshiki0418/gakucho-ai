@@ -25,13 +25,19 @@ def _init_matplotlib():
     if _plt is not None:
         return
     import matplotlib
+
     matplotlib.use("Agg")  # GUI不要
     import matplotlib.pyplot as plt
+
     # 日本語フォント設定（利用可能なら）
     try:
         import matplotlib.font_manager as fm
-        jp_fonts = [f.name for f in fm.fontManager.ttflist
-                    if "Gothic" in f.name or "Meiryo" in f.name or "Noto" in f.name]
+
+        jp_fonts = [
+            f.name
+            for f in fm.fontManager.ttflist
+            if "Gothic" in f.name or "Meiryo" in f.name or "Noto" in f.name
+        ]
         if jp_fonts:
             plt.rcParams["font.family"] = jp_fonts[0]
     except Exception:
@@ -46,6 +52,7 @@ def _init_numpy():
     global _np
     if _np is None:
         import numpy as np
+
         _np = np
 
 
@@ -55,8 +62,12 @@ def load_results(csv_path: str) -> pd.DataFrame:
 
     # 数値カラムの型変換
     numeric_cols = [
-        "ttft_ms", "ttfa_ms", "ttmr_ms", "total_ms",
-        "filler_duration_ms", "classifier_ms",
+        "ttft_ms",
+        "ttfa_ms",
+        "ttmr_ms",
+        "total_ms",
+        "filler_duration_ms",
+        "classifier_ms",
     ]
     for col in numeric_cols:
         if col in df.columns:
@@ -66,8 +77,11 @@ def load_results(csv_path: str) -> pd.DataFrame:
     bool_cols = ["filler_fired", "main_responded_in_time", "filler_enabled"]
     for col in bool_cols:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.lower().map(
-                {"true": True, "false": False, "1": True, "0": False}
+            df[col] = (
+                df[col]
+                .astype(str)
+                .str.lower()
+                .map({"true": True, "false": False, "1": True, "0": False})
             )
 
     return df
@@ -165,16 +179,34 @@ def plot_ttft_comparison(df: pd.DataFrame, output_dir: str):
 
     for i, cond in enumerate(conditions):
         subset = df[df["condition"] == cond]
-        means = [subset[subset["category"] == cat]["ttft_ms"].mean() for cat in categories]
-        stds = [subset[subset["category"] == cat]["ttft_ms"].std() for cat in categories]
+        means = [
+            subset[subset["category"] == cat]["ttft_ms"].mean() for cat in categories
+        ]
+        stds = [
+            subset[subset["category"] == cat]["ttft_ms"].std() for cat in categories
+        ]
         offset = (i - len(conditions) / 2 + 0.5) * width
-        bars = ax.bar(x + offset, means, width, yerr=stds, label=cond,
-                      color=colors[i % len(colors)], alpha=0.85, capsize=4)
+        bars = ax.bar(
+            x + offset,
+            means,
+            width,
+            yerr=stds,
+            label=cond,
+            color=colors[i % len(colors)],
+            alpha=0.85,
+            capsize=4,
+        )
         # 値ラベル
         for bar, mean in zip(bars, means):
             if not _np.isnan(mean):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 20,
-                        f"{mean:.0f}", ha="center", va="bottom", fontsize=9)
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 20,
+                    f"{mean:.0f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                )
 
     ax.set_xlabel("Query Category")
     ax.set_ylabel("TTFT (ms)")
@@ -258,11 +290,23 @@ def plot_filler_fire_rate(df: pd.DataFrame, output_dir: str):
             rates.append(rate)
 
         offset = (i - len(conditions) / 2 + 0.5) * width
-        bars = ax.bar(x + offset, rates, width, label=cond,
-                      color=colors[i % len(colors)], alpha=0.85)
+        bars = ax.bar(
+            x + offset,
+            rates,
+            width,
+            label=cond,
+            color=colors[i % len(colors)],
+            alpha=0.85,
+        )
         for bar, rate in zip(bars, rates):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
-                    f"{rate:.0f}%", ha="center", va="bottom", fontsize=9)
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 1,
+                f"{rate:.0f}%",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
 
     ax.set_xlabel("Query Category")
     ax.set_ylabel("Filler Fire Rate (%)")
@@ -298,29 +342,48 @@ def plot_psd_scatter(df: pd.DataFrame, output_dir: str):
         _plt.close(fig)
         return
 
-    fired = filler_on[filler_on["filler_fired"] == True]
-    not_fired = filler_on[filler_on["filler_fired"] == False]
+    fired = filler_on[filler_on["filler_fired"].eq(True)]
+    not_fired = filler_on[filler_on["filler_fired"].eq(False)]
 
     if not not_fired.empty:
         ax.scatter(
-            not_fired["ttmr_ms"], not_fired["ttft_ms"],
-            c="#1565C0", alpha=0.7, s=60, label="Filler not fired",
-            edgecolors="white", linewidth=0.5,
+            not_fired["ttmr_ms"],
+            not_fired["ttft_ms"],
+            c="#1565C0",
+            alpha=0.7,
+            s=60,
+            label="Filler not fired",
+            edgecolors="white",
+            linewidth=0.5,
         )
     if not fired.empty:
         ax.scatter(
-            fired["ttmr_ms"], fired["ttft_ms"],
-            c="#FF6F00", alpha=0.7, s=60, label="Filler fired",
-            edgecolors="white", linewidth=0.5,
+            fired["ttmr_ms"],
+            fired["ttft_ms"],
+            c="#FF6F00",
+            alpha=0.7,
+            s=60,
+            label="Filler fired",
+            edgecolors="white",
+            linewidth=0.5,
         )
 
     # 対角線（TTFT == TTMR → フィラーなしと同じ）
     lims = [0, max(ax.get_xlim()[1], ax.get_ylim()[1])]
-    ax.plot(lims, lims, "--", color="gray", alpha=0.5, label="TTFT = TTMR (no filler effect)")
+    ax.plot(
+        lims,
+        lims,
+        "--",
+        color="gray",
+        alpha=0.5,
+        label="TTFT = TTMR (no filler effect)",
+    )
 
     ax.set_xlabel("TTMR - Time To Main Response (ms)")
     ax.set_ylabel("TTFT - Time To First Text (ms)")
-    ax.set_title("Filler Effect: TTMR vs TTFT\n(Points below diagonal = filler reduced perceived delay)")
+    ax.set_title(
+        "Filler Effect: TTMR vs TTFT\n(Points below diagonal = filler reduced perceived delay)"
+    )
     ax.legend()
     ax.grid(alpha=0.3)
     fig.tight_layout()

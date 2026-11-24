@@ -295,7 +295,7 @@ def crop_image_by_bbox(
 ):
     left, top, right, bot = bbox
     if int(right - left) != int(bot - top):
-        print(f"right-left {right-left} != bot-top {bot-top}")
+        print(f"right-left {right - left} != bot-top {bot - top}")
     size = right - left
 
     src_center = np.array([(left + right) / 2, (top + bot) / 2], dtype=DTYPE)
