@@ -13,7 +13,6 @@ import argparse
 import csv
 import json
 import os
-import sys
 import time
 import urllib.parse
 import urllib.request
@@ -26,17 +25,37 @@ DEFAULT_API_URL = "http://localhost:8077"
 DEFAULT_TRIALS = 5
 DEFAULT_OUTPUT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "..", "data", "benchmark_results",
+    "..",
+    "data",
+    "benchmark_results",
 )
 
 # --- 条件定義 ---
 CONDITIONS = {
-    "dynamic_filler": {"filler_mode": "dynamic", "mode": "general"},        # 外部動的フィラー（提案手法 実験1互換用）
-    "static_filler": {"filler_mode": "static", "mode": "general"},          # 静的フィラー（比較手法1）
-    "filler_off": {"filler_mode": "off", "mode": "general"},                # フィラーなし（比較手法2）
-    "endogenous_filler": {"filler_mode": "endogenous", "mode": "general"},  # ★内因的フィラー（新実験条件）
-    "multi_agent": {"filler_mode": "off", "mode": "general"},               # 実験2用（Multi-Agent・フィラー無効）
-    "single_agent": {"filler_mode": "off", "mode": "baseline"},             # 実験2用（Single Agent・フィラー無効）
+    "dynamic_filler": {
+        "filler_mode": "dynamic",
+        "mode": "general",
+    },  # 外部動的フィラー（提案手法 実験1互換用）
+    "static_filler": {
+        "filler_mode": "static",
+        "mode": "general",
+    },  # 静的フィラー（比較手法1）
+    "filler_off": {
+        "filler_mode": "off",
+        "mode": "general",
+    },  # フィラーなし（比較手法2）
+    "endogenous_filler": {
+        "filler_mode": "endogenous",
+        "mode": "general",
+    },  # ★内因的フィラー（新実験条件）
+    "multi_agent": {
+        "filler_mode": "off",
+        "mode": "general",
+    },  # 実験2用（Multi-Agent・フィラー無効）
+    "single_agent": {
+        "filler_mode": "off",
+        "mode": "baseline",
+    },  # 実験2用（Single Agent・フィラー無効）
 }
 
 # CSV カラム定義
@@ -136,11 +155,16 @@ def run_benchmark(
         for category in query_categories:
             if category not in BENCHMARK_QUERIES:
                 continue
-            if condition in ["multi_agent", "single_agent"] and category in ["rag_search", "greeting", "unclear_query", "emotional_query"]:
+            if condition in ["multi_agent", "single_agent"] and category in [
+                "rag_search",
+                "greeting",
+                "unclear_query",
+                "emotional_query",
+            ]:
                 continue
             total_runs += len(BENCHMARK_QUERIES[category]["queries"]) * trials
 
-    print(f"=== ベンチマーク開始 ===")
+    print("=== ベンチマーク開始 ===")
     print(f"  API: {api_url}")
     print(f"  条件: {conditions}")
     print(f"  カテゴリ: {query_categories}")
@@ -166,7 +190,12 @@ def run_benchmark(
                 print(f"  [SKIP] 不明なカテゴリ: {category}")
                 continue
 
-            if condition in ["multi_agent", "single_agent"] and category in ["rag_search", "greeting", "unclear_query", "emotional_query"]:
+            if condition in ["multi_agent", "single_agent"] and category in [
+                "rag_search",
+                "greeting",
+                "unclear_query",
+                "emotional_query",
+            ]:
                 print(f"  [SKIP] 実験2評価対象外カテゴリ: {category}")
                 continue
 
@@ -177,11 +206,13 @@ def run_benchmark(
                 for trial in range(1, trials + 1):
                     run_count += 1
                     print(
-                        f"    [{run_count}/{total_runs}] "
-                        f"trial={trial} query=\"{query[:25]}...\""
-                        if len(query) > 25
-                        else f"    [{run_count}/{total_runs}] "
-                        f"trial={trial} query=\"{query}\"",
+                        (
+                            f"    [{run_count}/{total_runs}] "
+                            f'trial={trial} query="{query[:25]}..."'
+                            if len(query) > 25
+                            else f"    [{run_count}/{total_runs}] "
+                            f'trial={trial} query="{query}"'
+                        ),
                         end="",
                         flush=True,
                     )
@@ -227,13 +258,15 @@ def run_benchmark(
                     ttfa = timing.get("ttfa_ms", "?")
                     total = timing.get("total_ms", "?")
                     filler = "Yes" if timing.get("filler_fired") else "No"
-                    print(f"  → TTFT={ttft}ms, TTFA={ttfa}ms, Total={total}ms, Filler={filler}")
+                    print(
+                        f"  → TTFT={ttft}ms, TTFA={ttfa}ms, Total={total}ms, Filler={filler}"
+                    )
 
                     # APIに負荷をかけすぎないよう少し待つ
                     time.sleep(1.0)
 
     print()
-    print(f"=== ベンチマーク完了 ===")
+    print("=== ベンチマーク完了 ===")
     print(f"  結果: {len(results)} 件")
     print(f"  保存先: {output_path}")
 
@@ -272,7 +305,7 @@ def main():
     parser.add_argument(
         "--output-dir",
         default=DEFAULT_OUTPUT_DIR,
-        help=f"結果の出力先ディレクトリ",
+        help="結果の出力先ディレクトリ",
     )
     args = parser.parse_args()
 
@@ -287,7 +320,7 @@ def main():
     # 分析スクリプトの案内
     print()
     print("分析を実行するには:")
-    print(f"  python -m benchmark.analyze_benchmark --input \"{output_path}\"")
+    print(f'  python -m benchmark.analyze_benchmark --input "{output_path}"')
 
 
 if __name__ == "__main__":

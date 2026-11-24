@@ -1,17 +1,17 @@
 import argparse
-import csv
 import json
 import os
 import sys
 import time
 import urllib.request
-from datetime import datetime
 from pathlib import Path
 
 try:
     import pandas as pd
 except ImportError:
-    print("エラー: pandas がインストールされていません。'pip install pandas' を実行してください。")
+    print(
+        "エラー: pandas がインストールされていません。'pip install pandas' を実行してください。"
+    )
     sys.exit(1)
 
 # カテゴリ別に期待される応答スタイルの定義（domain_appropriatenessの評価基準）
@@ -141,9 +141,7 @@ def evaluate_main_response(
         )
 
     user_message = (
-        f"【Query】\n{query}\n\n"
-        f"【Main Response】\n{response}"
-        + domain_hint
+        f"【Query】\n{query}\n\n" f"【Main Response】\n{response}" + domain_hint
     )
 
     data = {
@@ -202,7 +200,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="LLM-as-a-Judge: 実験2 メイン応答品質の自動評価（6指標版）"
     )
-    parser.add_argument("--input", required=True, help="評価対象のベンチマークCSVファイルのパス")
+    parser.add_argument(
+        "--input", required=True, help="評価対象のベンチマークCSVファイルのパス"
+    )
     parser.add_argument("--model", default="gpt-4o", help="評価に使用するOpenAIモデル")
     args = parser.parse_args()
 
@@ -213,7 +213,7 @@ def main():
             with open(env_path, "r", encoding="utf-8") as f:
                 for line in f:
                     if line.startswith("OPENAI_API_KEY="):
-                        api_key = line.strip().split("=", 1)[1].strip('"\'')
+                        api_key = line.strip().split("=", 1)[1].strip("\"'")
                         break
 
     if not api_key:
@@ -237,12 +237,16 @@ def main():
     df_filtered = df_filtered[df_filtered["condition"].isin(target_conditions)].copy()
 
     # 3. RAGルートのペア除外
-    df_filtered["pair_id"] = df_filtered["query"] + "_" + df_filtered["trial"].astype(str)
+    df_filtered["pair_id"] = (
+        df_filtered["query"] + "_" + df_filtered["trial"].astype(str)
+    )
     rag_pair_ids = df_filtered[df_filtered["route"] == "rag"]["pair_id"].unique()
     eval_df = df_filtered[~df_filtered["pair_id"].isin(rag_pair_ids)].copy()
 
     # 4. 有効な回答があるもののみ
-    eval_df = eval_df[eval_df["response_text"].notna() & (eval_df["response_text"] != "")].copy()
+    eval_df = eval_df[
+        eval_df["response_text"].notna() & (eval_df["response_text"] != "")
+    ].copy()
 
     total = len(eval_df)
     if total == 0:
@@ -268,13 +272,16 @@ def main():
 
     try:
         from tqdm import tqdm
+
         iterator = tqdm(eval_df.iterrows(), total=total, desc="Evaluating")
     except ImportError:
+
         def simple_iterator(df):
             for i, (idx, row) in enumerate(df.iterrows(), 1):
                 print(f"Evaluating {i}/{total} ...", end="\r")
                 yield idx, row
             print()
+
         iterator = simple_iterator(eval_df)
 
     for idx, row in iterator:
@@ -286,7 +293,9 @@ def main():
 
         for m in llm_metrics:
             results_dict[f"{m}_score"].append(result.get(m, {}).get("score", 0))
-            results_dict[f"{m}_rationale"].append(result.get(m, {}).get("rationale", ""))
+            results_dict[f"{m}_rationale"].append(
+                result.get(m, {}).get("rationale", "")
+            )
 
         time.sleep(3.0)
 
@@ -322,26 +331,39 @@ def main():
 
     try:
         from scipy.stats import mannwhitneyu
-        has_scipy = True
+
+        has_scipy = callable(mannwhitneyu)
     except ImportError:
         has_scipy = False
 
     print("\n" + "=" * 60)
     print("【既存指標】")
     print("=" * 60)
-    _print_metrics(eval_df, ["instruction_following", "persona_consistency", "task_success"], has_scipy)
+    _print_metrics(
+        eval_df,
+        ["instruction_following", "persona_consistency", "task_success"],
+        has_scipy,
+    )
 
     print("\n" + "=" * 60)
     print("【新規指標：マルチエージェント有用性】")
     print("=" * 60)
-    _print_metrics(eval_df, ["specialization_depth", "domain_appropriateness", "response_precision"], has_scipy)
+    _print_metrics(
+        eval_df,
+        ["specialization_depth", "domain_appropriateness", "response_precision"],
+        has_scipy,
+    )
 
     print("\n" + "=" * 60)
     print("【一貫性スコア (Response Consistency)】")
     print("  ※ task_success の trial間標準偏差。小さいほど安定した回答")
     print("=" * 60)
     for cond in ["multi_agent", "single_agent"]:
-        label = "Multi-Agent              " if cond == "multi_agent" else "Single Agent             "
+        label = (
+            "Multi-Agent              "
+            if cond == "multi_agent"
+            else "Single Agent             "
+        )
         std_mean = consistency_by_condition.get(cond, float("nan"))
         print(f"  {label}: σ = {std_mean:.3f}")
 
@@ -376,7 +398,9 @@ def _print_metrics(eval_df: "pd.DataFrame", metrics: list, has_scipy: bool) -> N
 
         if has_scipy and len(dyn) > 0 and len(sta) > 0:
             stat, p = mannwhitneyu(dyn, sta, alternative="greater")
-            print(f"  U-test p-value (Multi > Single): {p:.3e} {'★ Significant!' if p < 0.05 else ''}")
+            print(
+                f"  U-test p-value (Multi > Single): {p:.3e} {'★ Significant!' if p < 0.05 else ''}"
+            )
 
 
 def _print_by_category(eval_df: "pd.DataFrame", score_col: str) -> None:

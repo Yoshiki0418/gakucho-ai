@@ -63,7 +63,7 @@ class RAGModule:
 
         # --- コンテキスト整形 ---
         def format_doc(i: int, d: Dict[str, Any]) -> str:
-            text = f"[{i+1}] (score={d['similarity']:.3f})\n{d['context']}"
+            text = f"[{i + 1}] (score={d['similarity']:.3f})\n{d['context']}"
             if d.get("source_url"):
                 text += f"\n参考URL: {d['source_url']}"
             return text

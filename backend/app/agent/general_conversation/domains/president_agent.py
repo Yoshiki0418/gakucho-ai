@@ -3,7 +3,6 @@ from typing import AsyncIterator
 
 from agents import Agent, Runner, WebSearchTool
 from app.prompts.president_persona import get_president_persona
-from app.prompts.president_persona import get_president_persona
 from dotenv import load_dotenv
 
 load_dotenv()

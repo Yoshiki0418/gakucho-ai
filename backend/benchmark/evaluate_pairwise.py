@@ -124,8 +124,14 @@ def load_api_key() -> str:
     return key
 
 
-def call_judge(api_key: str, query: str, response_a: str, response_b: str,
-               category: str = "", model: str = "gpt-4o") -> dict | None:
+def call_judge(
+    api_key: str,
+    query: str,
+    response_a: str,
+    response_b: str,
+    category: str = "",
+    model: str = "gpt-4o",
+) -> dict | None:
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
@@ -176,7 +182,9 @@ def resolve_winner(raw_winner: str, multi_is_a: bool) -> str:
     return "TIE"
 
 
-def print_metric_summary(df_results: "pd.DataFrame", metric: str, has_scipy: bool) -> None:
+def print_metric_summary(
+    df_results: "pd.DataFrame", metric: str, has_scipy: bool
+) -> None:
     from scipy.stats import binomtest  # type: ignore
 
     sub = df_results[df_results["metric"] == metric]
@@ -188,20 +196,30 @@ def print_metric_summary(df_results: "pd.DataFrame", metric: str, has_scipy: boo
 
     label = metric.replace("_", " ").title()
     print(f"\n--- {label} ---")
-    print(f"  Multi  勝利: {multi_wins:3d} / {total}  ({100*multi_wins/total:5.1f}%)")
-    print(f"  Single 勝利: {single_wins:3d} / {total}  ({100*single_wins/total:5.1f}%)")
-    print(f"  引き分け:    {ties:3d} / {total}  ({100*ties/total:5.1f}%)")
+    print(
+        f"  Multi  勝利: {multi_wins:3d} / {total}  ({100 * multi_wins / total:5.1f}%)"
+    )
+    print(
+        f"  Single 勝利: {single_wins:3d} / {total}  ({100 * single_wins / total:5.1f}%)"
+    )
+    print(f"  引き分け:    {ties:3d} / {total}  ({100 * ties / total:5.1f}%)")
 
     if decisive > 0:
         win_rate = multi_wins / decisive
-        print(f"  Multi 勝率（引き分け除外）: {win_rate:.3f}  ({multi_wins}/{decisive})")
+        print(
+            f"  Multi 勝率（引き分け除外）: {win_rate:.3f}  ({multi_wins}/{decisive})"
+        )
         if has_scipy:
             result = binomtest(multi_wins, decisive, p=0.5, alternative="greater")
             p = result.pvalue
-            sig = "★ p<0.05 有意" if p < 0.05 else ("† p<0.10 傾向" if p < 0.10 else "n.s.")
+            sig = (
+                "★ p<0.05 有意"
+                if p < 0.05
+                else ("† p<0.10 傾向" if p < 0.10 else "n.s.")
+            )
             print(f"  二項検定 p-value: {p:.4f}  {sig}")
 
-    print(f"  カテゴリ別:")
+    print("  カテゴリ別:")
     for cat in sorted(sub["category"].unique()):
         c = sub[sub["category"] == cat]
         mw = int((c["winner"] == "multi").sum())
@@ -215,10 +233,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Pairwise比較評価: Multi-Agent vs Single Agent"
     )
-    parser.add_argument("--multi", required=True, help="Multi-Agent のベンチマークCSVパス")
-    parser.add_argument("--single", required=True, help="Single Agent のベンチマークCSVパス")
+    parser.add_argument(
+        "--multi", required=True, help="Multi-Agent のベンチマークCSVパス"
+    )
+    parser.add_argument(
+        "--single", required=True, help="Single Agent のベンチマークCSVパス"
+    )
     parser.add_argument("--model", default="gpt-4o", help="評価に使用するOpenAIモデル")
-    parser.add_argument("--seed", type=int, default=42, help="A/B割り当てのランダムシード")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="A/B割り当てのランダムシード"
+    )
     args = parser.parse_args()
 
     api_key = load_api_key()
@@ -230,7 +254,9 @@ def main() -> None:
 
     # --- データ読み込み ---
     df_multi = pd.read_csv(args.multi)
-    df_multi["condition"] = df_multi["condition"].replace({"dynamic_filler": "multi_agent"})
+    df_multi["condition"] = df_multi["condition"].replace(
+        {"dynamic_filler": "multi_agent"}
+    )
     df_multi = df_multi[df_multi["condition"] == "multi_agent"].copy()
 
     df_all_single = pd.read_csv(args.single)
@@ -245,8 +271,12 @@ def main() -> None:
     df_single = df_single[df_single["route"] == "dialogue"].copy()
 
     # --- 有効な応答のみ ---
-    df_multi = df_multi[df_multi["response_text"].notna() & (df_multi["response_text"] != "")]
-    df_single = df_single[df_single["response_text"].notna() & (df_single["response_text"] != "")]
+    df_multi = df_multi[
+        df_multi["response_text"].notna() & (df_multi["response_text"] != "")
+    ]
+    df_single = df_single[
+        df_single["response_text"].notna() & (df_single["response_text"] != "")
+    ]
 
     # --- ペアマッチング（query + trial で結合）---
     pairs = []
@@ -255,20 +285,20 @@ def main() -> None:
         trial = int(m_row.get("trial", 1))
 
         # query + trial で厳密にマッチ
-        match = df_single[
-            (df_single["query"] == query) & (df_single["trial"] == trial)
-        ]
+        match = df_single[(df_single["query"] == query) & (df_single["trial"] == trial)]
         if len(match) == 0:
             continue
 
         s_row = match.iloc[0]
-        pairs.append({
-            "query": query,
-            "category": str(m_row.get("category", "")),
-            "trial": trial,
-            "multi_response": str(m_row["response_text"]),
-            "single_response": str(s_row["response_text"]),
-        })
+        pairs.append(
+            {
+                "query": query,
+                "category": str(m_row.get("category", "")),
+                "trial": trial,
+                "multi_response": str(m_row["response_text"]),
+                "single_response": str(s_row["response_text"]),
+            }
+        )
 
     total_pairs = len(pairs)
     print(f"入力 Multi  : {args.multi}")
@@ -277,20 +307,26 @@ def main() -> None:
     print("-" * 60)
 
     if total_pairs == 0:
-        print("マッチするペアがありません。queryカラムが一致しているか確認してください。")
+        print(
+            "マッチするペアがありません。queryカラムが一致しているか確認してください。"
+        )
         sys.exit(1)
 
     # --- Pairwise評価ループ ---
     results = []
     for i, pair in enumerate(pairs, 1):
-        print(f"Evaluating {i}/{total_pairs} (trial={pair['trial']}, cat={pair['category']})...", end="\r")
+        print(
+            f"Evaluating {i}/{total_pairs} (trial={pair['trial']}, cat={pair['category']})...",
+            end="\r",
+        )
 
         multi_is_a = random.random() < 0.5
         response_a = pair["multi_response"] if multi_is_a else pair["single_response"]
         response_b = pair["single_response"] if multi_is_a else pair["multi_response"]
 
-        judgment = call_judge(api_key, pair["query"], response_a, response_b,
-                              pair["category"], args.model)
+        judgment = call_judge(
+            api_key, pair["query"], response_a, response_b, pair["category"], args.model
+        )
         if judgment is None:
             continue
 
@@ -300,16 +336,18 @@ def main() -> None:
             reason = m_data.get("reason", "")
             actual_winner = resolve_winner(raw_winner, multi_is_a)
 
-            results.append({
-                "query": pair["query"],
-                "category": pair["category"],
-                "trial": pair["trial"],
-                "metric": metric,
-                "winner": actual_winner,
-                "raw_winner_ab": raw_winner,
-                "multi_is_a": multi_is_a,
-                "reason": reason,
-            })
+            results.append(
+                {
+                    "query": pair["query"],
+                    "category": pair["category"],
+                    "trial": pair["trial"],
+                    "metric": metric,
+                    "winner": actual_winner,
+                    "raw_winner_ab": raw_winner,
+                    "multi_is_a": multi_is_a,
+                    "reason": reason,
+                }
+            )
 
         time.sleep(0.5)
 
@@ -323,7 +361,8 @@ def main() -> None:
 
     try:
         from scipy.stats import binomtest
-        has_scipy = True
+
+        has_scipy = callable(binomtest)
     except ImportError:
         has_scipy = False
         print("注意: scipy がないため二項検定はスキップされます。")

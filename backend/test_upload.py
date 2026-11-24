@@ -1,8 +1,8 @@
 import requests
 
-url = 'http://localhost:8076/rag/upload'
-files = {'file': open('dummy.csv', 'rb')}
-data = {'source': 'dummy.csv'}
+url = "http://localhost:8076/rag/upload"
+files = {"file": open("dummy.csv", "rb")}
+data = {"source": "dummy.csv"}
 
 try:
     response = requests.post(url, files=files, data=data)
