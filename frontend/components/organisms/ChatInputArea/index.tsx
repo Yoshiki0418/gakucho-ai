@@ -12,11 +12,12 @@ interface ChatInputAreaProps {
   onSend: (value: string) => void
   isSending?: boolean
   disabled?: boolean
+  sttModel?: string
 }
 
 /**
  * ChatInputArea コンポーネント（UIモード切り替え可能）
- * 
+ *
  * mode="standard" → 通常デザイン
  * mode="futuristic" → 光るフューチャーデザイン
  */

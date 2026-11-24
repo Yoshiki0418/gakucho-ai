@@ -1,10 +1,10 @@
 import asyncio
 import datetime
-import os
 
 # import base64
 # import io
 import json
+import os
 import re
 import time
 
@@ -20,10 +20,12 @@ from app.agent.general_conversation.domains import (
 )
 from app.models import llm, tts
 from app.services.history_service import HistoryService
+from app.services.inference_settings import parse_settings, settings_catalog
 
 # from app.models.lipsync.ditto_batch_streamer import AvatarStreamer
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 
 # import queue as sync_queue
 # from typing import Dict
@@ -429,9 +431,7 @@ _TLD = (
     r"jp|com|net|org|info|biz|edu|gov|io|ai|co|dev|app)"
 )
 _RE_BARE_URL = re.compile(
-    r"(?:https?://|www\.)?"
-    r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+"
-    + _TLD
+    r"(?:https?://|www\.)?" r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+" + _TLD
     # パス/クエリはURL安全なASCII文字のみ（日本語は消さず、?x=1 等のクエリは消す）
     + r"(?:/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%\[\]]*)?",
     re.IGNORECASE,
@@ -463,7 +463,8 @@ def _sanitize_for_speech(text: str) -> str:
 # --- ベンチマークログ保存用ディレクトリ ---
 _BENCHMARK_LOG_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "data", "benchmark_logs",
+    "data",
+    "benchmark_logs",
 )
 
 
@@ -476,8 +477,7 @@ def _append_benchmark_log(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-
-def _synthesize_audio_packet(tts_model, text: str) -> dict:
+def _synthesize_audio_packet(tts_model, text: str, speaker_id: int = 0) -> dict:
     """TTS音声と、同一推論由来のビセーム(口形)列を返す。
 
     リップシンクはこの列を UE のコマンドサーバへ送って口を動かすため、
@@ -485,32 +485,69 @@ def _synthesize_audio_packet(tts_model, text: str) -> dict:
     ビセーム対応のTTSでない場合は音声のみを返し、口パクは従来動作に落ちる。
     """
     synthesize_aligned = getattr(tts_model, "synthesize_with_visemes_to_base64", None)
+    options = (
+        {"speaker_id": speaker_id}
+        if hasattr(tts_model, "get_available_speakers")
+        else {}
+    )
     if callable(synthesize_aligned):
-        return synthesize_aligned(text)
-    return {"audio": tts_model.synthesize_to_base64(text), "visemes": []}
+        return synthesize_aligned(text, **options)
+    return {"audio": tts_model.synthesize_to_base64(text, **options), "visemes": []}
+
+
+def _available_tts_voices() -> list[dict]:
+    list_speakers = getattr(tts, "get_available_speakers", None)
+    if callable(list_speakers):
+        return list_speakers()
+    return [{"id": "0", "label": "既定の話者"}]
+
+
+@router.get("/settings")
+async def get_inference_settings():
+    from app.services.speech_settings import get_stt_options
+
+    return settings_catalog(_available_tts_voices(), get_stt_options())
 
 
 @router.get("/char-stream-orchestrator")
 async def char_stream_orchestrator(request: Request):
     t0 = time.perf_counter()  # === 計測開始 ===
+    # Validate before reading/writing history or opening an SSE response.
+    try:
+        settings = parse_settings(request.query_params)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422, detail=exc.errors(include_context=False, include_url=False)
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    voices = _available_tts_voices()
+    if not voices:
+        raise HTTPException(status_code=503, detail="利用可能な音声話者がありません。")
+    if "tts_voice" not in request.query_params:
+        settings = settings.model_copy(update={"tts_voice": int(voices[0]["id"])})
+    if str(settings.tts_voice) not in {str(voice["id"]) for voice in voices}:
+        raise HTTPException(
+            status_code=422, detail="tts_voice: 利用可能な話者を選択してください。"
+        )
+    if (
+        request.query_params.get("tts_provider", "style-bert-vits2")
+        != "style-bert-vits2"
+    ):
+        raise HTTPException(
+            status_code=422, detail="tts_provider: 対応していない音声エンジンです。"
+        )
     user_input = request.query_params.get("text", "こんにちは！")
     user_id = request.query_params.get("user_id", "default")
     session_id = request.query_params.get("session_id", "default")
-    mode = request.query_params.get("mode", "general")
-    filler_enabled_str = request.query_params.get("filler_enabled", "true").lower()
-    filler_mode_str = request.query_params.get("filler_mode", None)
+    mode = settings.mode
+    llm_model = settings.llm_model
+    filler_model = settings.filler_model
+    filler_mode = settings.filler_mode
 
-    # モデル選択（オプション）: 指定が無ければ orchestrator の既定モデルを使う
-    llm_model = request.query_params.get("llm_model", None)
-    filler_model = request.query_params.get("filler_model", None)
-    
-    if filler_mode_str:
-        filler_mode = filler_mode_str.lower()
-    else:
-        # 後方互換性
-        filler_mode = "dynamic" if filler_enabled_str == "true" else "off"
-        
-    benchmark_mode = request.query_params.get("benchmark_mode", "false").lower() == "true"
+    benchmark_mode = (
+        request.query_params.get("benchmark_mode", "false").lower() == "true"
+    )
 
     # --- 対話履歴の取得 ---
     history = []
@@ -535,16 +572,8 @@ async def char_stream_orchestrator(request: Request):
         except Exception as e:
             print(f"[WARNING] ユーザーメッセージ保存に失敗: {e}")
 
-    # モデル選択
-    tts_provider = request.query_params.get("tts_provider", None)
-    tts_voice = request.query_params.get("tts_voice", None)
-
-    if tts_voice:
-        from app.models.model_registry import create_tts
-
-        _tts = create_tts(tts_provider or "style-bert-vits2")
-    else:
-        _tts = tts
+    # Voice selection is passed per synthesis call, never stored on the shared model.
+    _tts = tts
 
     PUNCTUATIONS = {"。", "！", "？", "!", "?"}
 
@@ -568,6 +597,10 @@ async def char_stream_orchestrator(request: Request):
             timing_data=timing_data,
             llm_model=llm_model,
             filler_model=filler_model,
+            temperature=settings.temperature,
+            max_tokens=settings.max_tokens,
+            rag_top_k=settings.rag_top_k,
+            rag_threshold=settings.rag_threshold,
         ):
             raw_piece = str(chunk)
             sentence_buffer += raw_piece
@@ -628,6 +661,7 @@ async def char_stream_orchestrator(request: Request):
                     _synthesize_audio_packet,
                     _tts,
                     current_sentence,
+                    settings.tts_voice,
                 )
                 if tts_duration_ms is None:
                     tts_duration_ms = (time.perf_counter() - tts_start) * 1000
@@ -688,6 +722,7 @@ async def char_stream_orchestrator(request: Request):
                     _synthesize_audio_packet,
                     _tts,
                     current_sentence,
+                    settings.tts_voice,
                 )
                 yield (
                     "data: "
@@ -723,25 +758,41 @@ async def char_stream_orchestrator(request: Request):
             "total_ms": round(total_ms),
             "ttft_ms": round(ttft_ms) if ttft_ms is not None else None,
             "ttfa_ms": round(ttfa_ms) if ttfa_ms is not None else None,
-            "ttmr_ms": round(timing_data.get("ttmr_ms")) if timing_data.get("ttmr_ms") is not None else None,
-            "first_sentence_ms": round(first_sentence_ms) if first_sentence_ms is not None else None,
-            "tts_duration_ms": round(tts_duration_ms) if tts_duration_ms is not None else None,
+            "ttmr_ms": (
+                round(timing_data.get("ttmr_ms"))
+                if timing_data.get("ttmr_ms") is not None
+                else None
+            ),
+            "first_sentence_ms": (
+                round(first_sentence_ms) if first_sentence_ms is not None else None
+            ),
+            "tts_duration_ms": (
+                round(tts_duration_ms) if tts_duration_ms is not None else None
+            ),
             "filler_mode": timing_data.get("filler_mode"),
             "filler_fired": timing_data.get("filler_fired", False),
             "filler_text": timing_data.get("filler_text", ""),
-            "filler_ttfb_ms": round(timing_data.get("filler_ttfb_ms")) if timing_data.get("filler_ttfb_ms") is not None else None,
-            "filler_duration_ms": round(timing_data.get("filler_duration_ms")) if timing_data.get("filler_duration_ms") is not None else None,
-            "classifier_ms": round(timing_data.get("classifier_ms")) if timing_data.get("classifier_ms") is not None else None,
+            "filler_ttfb_ms": (
+                round(timing_data.get("filler_ttfb_ms"))
+                if timing_data.get("filler_ttfb_ms") is not None
+                else None
+            ),
+            "filler_duration_ms": (
+                round(timing_data.get("filler_duration_ms"))
+                if timing_data.get("filler_duration_ms") is not None
+                else None
+            ),
+            "classifier_ms": (
+                round(timing_data.get("classifier_ms"))
+                if timing_data.get("classifier_ms") is not None
+                else None
+            ),
             "route": timing_data.get("route"),
             "main_responded_in_time": timing_data.get("main_responded_in_time"),
             "model_filler_fired": timing_data.get("model_filler_fired"),
             "model_filler_text": timing_data.get("model_filler_text", ""),
         }
-        yield (
-            "data: "
-            + json.dumps(timing_payload)
-            + "\n\n"
-        )
+        yield ("data: " + json.dumps(timing_payload) + "\n\n")
 
         # --- ベンチマークモード: JSONL にログ追記 ---
         if benchmark_mode:

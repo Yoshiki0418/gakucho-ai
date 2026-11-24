@@ -1,0 +1,43 @@
+name: User settings tests
+
+on:
+  pull_request:
+    branches:
+      - "*"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-settings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install test dependencies without model weights
+        run: >-
+          python -m pip install
+          openai-agents==0.17.4 fastapi==0.136.3 httpx==0.28.1
+          pydantic==2.13.4 numpy==1.26.4 python-multipart
+      - name: Check request settings and speech boundaries
+        working-directory: backend
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s tests -p 'test_*settings.py' -v
+
+  frontend-settings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Check settings and microphone lifecycle
+        working-directory: frontend
+        run: node --test features/inference-settings/settings.test.mjs features/speech/speechController.test.mjs

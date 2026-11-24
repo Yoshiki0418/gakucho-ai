@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 
 # Explicitly load from the mounted path (Docker DevContainer)
@@ -8,11 +9,14 @@ if os.path.exists(env_path):
 else:
     load_dotenv()  # Fallback
 
-from app.routers import audio_stream_router, rag_router, text_chat_router
-
+from app.routers import (
+    audio_stream_router,
+    rag_router,
+    speech_settings_router,
+    text_chat_router,
+)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 
 # =========================================================
 # アプリ初期化
@@ -71,6 +75,7 @@ app.add_middleware(
 app.include_router(text_chat_router.router)
 app.include_router(audio_stream_router.router)
 app.include_router(rag_router.router)
+app.include_router(speech_settings_router.router)
 
 
 # =========================================================

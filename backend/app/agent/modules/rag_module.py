@@ -127,6 +127,8 @@ class RAGModule:
         template_name: Optional[str] = None,
         history: Optional[List[dict[str, str]]] = None,
         tool_calls: Optional[List[dict[str, str]]] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> AsyncIterator[str]:
         """
         🔹 ストリーミング版 RAG 実行
@@ -143,7 +145,7 @@ class RAGModule:
             message=prompt,
             history=[],
             tool_calls=tool_calls,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
+            max_tokens=self.max_tokens if max_tokens is None else max_tokens,
+            temperature=self.temperature if temperature is None else temperature,
         ):
             yield chunk

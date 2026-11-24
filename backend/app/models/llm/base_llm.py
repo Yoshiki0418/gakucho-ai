@@ -83,7 +83,13 @@ class BaseLLM(ABC):
         # トークン数有りモード
         if token_count:
             prompt_tokens = await self.count_tokens(message)
-            content = await self._generate_impl(message, history, tool_calls)
+            content = await self._generate_impl(
+                message=message,
+                history=history,
+                tool_calls=tool_calls,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
             completion_tokens = await self.count_tokens(content)
             return GenerationResult(
                 content=content,
@@ -92,7 +98,11 @@ class BaseLLM(ABC):
             )
 
         return await self._generate_impl(
-            message, history, tool_calls, max_tokens, temperature
+            message=message,
+            history=history,
+            tool_calls=tool_calls,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
 
     @abstractmethod

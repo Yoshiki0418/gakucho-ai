@@ -1,165 +1,51 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { browserSpeechDependencies, createSpeechController, SpeechPhase } from '../speechController'
 
 interface UseSpeechRecognitionOptions {
   lang?: string
-  interimResults?: boolean
+  model?: string
+  autoSubmit?: boolean
   continuous?: boolean
+  interimResults?: boolean
   onResult?: (text: string, isFinal: boolean) => void
   onError?: (error: string) => void
 }
 
-type SpeechRecognitionResultItemLike = {
-  transcript: string
-}
-
-type SpeechRecognitionResultLike = {
-  isFinal: boolean
-  length: number
-  [index: number]: SpeechRecognitionResultItemLike
-}
-
-type SpeechRecognitionEventLike = {
-  results: {
-    length: number
-    [index: number]: SpeechRecognitionResultLike
-  }
-}
-
-type SpeechRecognitionErrorEventLike = {
-  error: string
-}
-
-type SpeechRecognitionLike = {
-  lang: string
-  interimResults: boolean
-  continuous: boolean
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null
-  onend: (() => void) | null
-  start: () => void
-  stop: () => void
-  abort?: () => void
-}
-
 export function useSpeechRecognition({
-  lang = 'ja-JP',
-  interimResults = true,
-  continuous = true,
-  onResult,
-  onError,
+  lang = 'ja-JP', model = 'browser', autoSubmit = false, continuous, interimResults, onResult, onError,
 }: UseSpeechRecognitionOptions = {}) {
-  const [isListening, setIsListening] = useState(false)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const [phase, setPhase] = useState<SpeechPhase>('idle')
+  const callbacks = useRef({ onResult, onError })
+  callbacks.current = { onResult, onError }
+  const controller = useRef<ReturnType<typeof createSpeechController> | null>(null)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const SpeechRecognitionCtor =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-
-    if (!SpeechRecognitionCtor) {
-      onError?.('このブラウザでは音声認識がサポートされていません。')
-      return
-    }
-
-    const recognition: SpeechRecognitionLike = new SpeechRecognitionCtor()
-    recognition.lang = lang
-    recognition.interimResults = interimResults
-    recognition.continuous = continuous
-
-    recognition.onresult = (event: SpeechRecognitionEventLike) => {
-      let finalTranscript = ''
-      let interimTranscript = ''
-
-      // 毎回すべての結果を走査して文字列を再構築する
-      for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i]
-        const transcript = result[0]?.transcript ?? ''
-
-        if (result.isFinal) {
-          finalTranscript += transcript
-        } else {
-          interimTranscript += transcript
-        }
-      }
-
-      // 結果を通知
-      if (finalTranscript || interimTranscript) {
-        onResult?.(finalTranscript + interimTranscript, false)
-      }
-    }
-    // ---------------------------------------------------
-
-    recognition.onerror = (e: SpeechRecognitionErrorEventLike) => {
-      const errorMsg = e?.error ?? 'SpeechRecognition error'
-      if (errorMsg !== 'no-speech') {
-        onError?.(errorMsg)
-      }
-    }
-
-    recognition.onend = () => {
-      setIsListening(false)
-    }
-
-    recognitionRef.current = recognition
-
-    // クリーンアップ関数
+    let mounted = true
+    const current = createSpeechController({
+      onPhase: (next) => { if (mounted) setPhase(next) },
+      onResult: (text, final) => callbacks.current.onResult?.(text, final),
+      onError: (message) => callbacks.current.onError?.(message),
+    }, browserSpeechDependencies())
+    controller.current = current
+    setPhase('idle')
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop()
-        } catch (e) {
-        }
-      }
-      recognitionRef.current = null
+      mounted = false
+      current.cancel()
+      if (controller.current === current) controller.current = null
     }
-  }, [lang, interimResults, continuous, onResult, onError])
-
-  // --- 操作メソッドの安定化 (useCallback) ---
+  }, [model, lang, autoSubmit, continuous, interimResults])
 
   const start = useCallback(() => {
-    if (recognitionRef.current && !isListening) {
-      try {
-        recognitionRef.current.start()
-        setIsListening(true)
-      } catch (e) {
-        console.error('Failed to start recognition:', e)
-      }
-    }
-  }, [isListening])
+    void controller.current?.start(model, autoSubmit, lang, { continuous, interimResults })
+  }, [model, autoSubmit, lang, continuous, interimResults])
+  const stop = useCallback(() => controller.current?.finish(), [])
+  const reset = useCallback(() => controller.current?.cancel(), [])
+  const syncExternalText = useCallback((text: string) => { void text }, [])
 
-  const stop = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      try {
-        recognitionRef.current.stop()
-        setIsListening(false)
-      } catch (e) {
-        console.error('Failed to stop recognition:', e)
-      }
-    }
-  }, [isListening])
-
-  const reset = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        // abortがあればabort、なければstopでリセットを試みる
-        if (recognitionRef.current.abort) {
-          recognitionRef.current.abort()
-        } else {
-          recognitionRef.current.stop()
-        }
-      } catch (e) {
-        console.error('Failed to reset recognition:', e)
-      }
-      setIsListening(false)
-    }
-  }, [])
-
-  const syncExternalText = useCallback((text: string) => {
-    // Do nothing
-  }, [])
-
-  return { isListening, start, stop, reset, syncExternalText }
+  return {
+    isListening: phase === 'listening', isTranscribing: phase === 'transcribing',
+    isStarting: phase === 'starting', start, stop, reset, syncExternalText,
+  }
 }

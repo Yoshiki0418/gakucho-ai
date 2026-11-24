@@ -12,6 +12,7 @@ interface ChatInputAreaProps {
   onSend: (value: string) => void
   isSending?: boolean
   disabled?: boolean
+  sttModel?: string
 }
 
 /**
@@ -27,9 +28,10 @@ export default function FuturisticChatInputArea({
   onSend,
   isSending = false,
   disabled = false,
+  sttModel = 'browser',
 }: ChatInputAreaProps) {
   const [isFocused, setIsFocused] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
+  const [speechError, setSpeechError] = useState('')
   const lastRecognizedRef = useRef('')
 
   // 値とハンドラーを最新に保つためのRef（onResult内で常に最新を使うため）
@@ -48,12 +50,15 @@ export default function FuturisticChatInputArea({
     }
   }, [])
 
-  const { isListening, start, stop, reset, syncExternalText } =
+  const { isListening, isStarting, isTranscribing, start, stop, reset, syncExternalText } =
     useSpeechRecognition({
       continuous: true,
+      model: sttModel,
       onResult,
-      onError: (err) => console.error('SpeechRecognition Error:', err),
+      onError: setSpeechError,
     })
+
+  const isRecording = isListening || isStarting || isTranscribing
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e)
@@ -64,16 +69,15 @@ export default function FuturisticChatInputArea({
   const handleMicClick = () => {
     if (disabled) return
 
-    if (isListening) {
+    setSpeechError('')
+    if (isRecording) {
       // 停止
       stop()
-      setIsRecording(false)
     } else {
       // 開始
       syncExternalText(value)
       lastRecognizedRef.current = ''
       start()
-      setIsRecording(true)
     }
   }
 
@@ -87,7 +91,6 @@ export default function FuturisticChatInputArea({
     // 完全リセット
     stop()
     reset()
-    setIsRecording(false)
     lastRecognizedRef.current = ''
   }
 
@@ -98,8 +101,10 @@ export default function FuturisticChatInputArea({
 
   // 音声認識終了時
   useEffect(() => {
-    if (!isListening) setIsRecording(false)
-  }, [isListening])
+    if (disabled) reset()
+  }, [disabled, reset])
+
+  useEffect(() => { setSpeechError('') }, [sttModel])
 
   const canSend = !!value.trim() && !disabled && !isSending
 
@@ -173,6 +178,7 @@ export default function FuturisticChatInputArea({
             <button
               type="button"
               onClick={handleMicClick}
+              aria-label={isRecording ? '音声入力を終了・キャンセル' : '音声入力を開始'}
               disabled={disabled}
               style={{
                 width: 40,
@@ -231,7 +237,11 @@ export default function FuturisticChatInputArea({
             </button>
           </div>
         </div>
-      </Box>
+        {(isStarting || isTranscribing) && <p role="status" style={{ color: '#94a3b8', fontSize: 12 }}>
+        {isStarting ? 'マイクの使用を確認しています…' : '文字起こし中…（マイクボタンでキャンセル）'}
+      </p>}
+      {speechError && <p role="alert" style={{ color: '#fca5a5', fontSize: 12 }}>{speechError}</p>}
+    </Box>
     </form>
   )
 }

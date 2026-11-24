@@ -2,11 +2,11 @@ import asyncio
 import time
 from typing import AsyncIterator, Optional
 
+from app.agent.baseline_agent import BaselineAgent
 from app.agent.general_conversation.agent import GeneralConversationAgent
 from app.agent.modules.decision_module import LLMDecisionClassifier
 from app.agent.modules.rag_module import RAGModule
 from app.models.llm import BaseLLM, OpenAILLM
-from app.agent.baseline_agent import BaselineAgent
 
 
 class ResponseOrchestrator:
@@ -47,17 +47,35 @@ class ResponseOrchestrator:
 
     # --- RAG ルート処理 ---
     async def handle_rag(
-        self, user_id: str, text: str, history: list[dict] | None = None
+        self,
+        user_id: str,
+        text: str,
+        history: list[dict] | None = None,
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        rag_top_k: int = 5,
+        rag_threshold: float = 0.25,
     ) -> AsyncIterator[str]:
         """
         RAG はフィラーなし
         """
-        async for chunk in self.rag_engine.run_stream(query=text):
+        async for chunk in self.rag_engine.run_stream(
+            query=text,
+            top_k=rag_top_k,
+            threshold=rag_threshold,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        ):
             yield chunk
 
     # --- 日常対話 + フィラー ---
     async def handle_daily_with_filler(
-        self, user_id: str, text: str, history: list[dict] | None = None, mode: str = "general"
+        self,
+        user_id: str,
+        text: str,
+        history: list[dict] | None = None,
+        mode: str = "general",
     ) -> AsyncIterator[str]:
         """
         - 本応答(OpenAI Agent SDK)をストリーミング
@@ -314,6 +332,7 @@ class ResponseOrchestrator:
     async def _start_static_filler_producer(self, text: str) -> asyncio.Queue:
         """固定フィラー（ベースライン比較用）をキューに流すプロデューサを起動"""
         import random
+
         queue: asyncio.Queue = asyncio.Queue()
 
         async def producer():
@@ -325,17 +344,19 @@ class ResponseOrchestrator:
                     "少々お待ちください。",
                     "確認いたしますね。",
                     "えーと、そうですね…",
-                    "お調べしますので、少しお待ちください。"
+                    "お調べしますので、少しお待ちください。",
                 ]
                 chosen = random.choice(static_fillers)
-                
+
                 # ストリーミングを模倣するために数文字ずつ出力
                 chunk_size = 2
                 for i in range(0, len(chosen), chunk_size):
-                    await queue.put(chosen[i:i+chunk_size])
-                    await asyncio.sleep(0.05) # 少しだけディレイを入れて自然に
+                    await queue.put(chosen[i : i + chunk_size])
+                    await asyncio.sleep(0.05)  # 少しだけディレイを入れて自然に
             except Exception as e:
-                print(f"[ResponseOrchestrator] _start_static_filler_producer error: {e}")
+                print(
+                    f"[ResponseOrchestrator] _start_static_filler_producer error: {e}"
+                )
                 pass
             finally:
                 await queue.put(None)  # 終了マーカー
@@ -354,6 +375,10 @@ class ResponseOrchestrator:
         timing_data: dict | None = None,
         llm_model: str | None = None,
         filler_model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        rag_top_k: int = 5,
+        rag_threshold: float = 0.25,
     ) -> AsyncIterator[str]:
         """
         FastAPI / SSE / WebSocket からはこのメソッドだけ利用。
@@ -375,17 +400,38 @@ class ResponseOrchestrator:
 
         # --- タイミング計測の初期化 ---
         _td = timing_data if timing_data is not None else {}
-        _td.update({
-            "filler_mode": filler_mode,
-            "filler_fired": False,
-            "filler_text": "",
-            "filler_ttfb_ms": None,
-            "filler_duration_ms": None,
-            "ttmr_ms": None,
-            "classifier_ms": None,
-            "route": None,
-            "main_responded_in_time": None,
-        })
+        _td.update(
+            {
+                "filler_mode": filler_mode,
+                "filler_fired": False,
+                "filler_text": "",
+                "filler_ttfb_ms": None,
+                "filler_duration_ms": None,
+                "ttmr_ms": None,
+                "classifier_ms": None,
+                "route": None,
+                "main_responded_in_time": None,
+            }
+        )
+
+        # The neutral assistant must not route through president-specific prompts.
+        if mode == "assistant":
+            _td.update({"route": "dialogue", "classifier_ms": 0})
+            async for chunk in self.daily_agent.stream_generate(
+                user_id=user_id,
+                message=text,
+                history=history,
+                mode=mode,
+                filler_mode="none",
+                timing_data=_td,
+                llm_model=llm_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                if _td["ttmr_ms"] is None:
+                    _td["ttmr_ms"] = (time.perf_counter() - start) * 1000
+                yield chunk
+            return
 
         # =============================
         # 3つ同時起動
@@ -430,8 +476,10 @@ class ResponseOrchestrator:
                 filler_mode=filler_mode,
                 timing_data=_td,
                 llm_model=llm_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
             ).__aiter__()
-        
+
         main_first_task = asyncio.create_task(main_iter.__anext__())
 
         try:
@@ -472,7 +520,9 @@ class ResponseOrchestrator:
                             if chunk is None:
                                 break
                             if not filler_text and chunk:
-                                _td["filler_ttfb_ms"] = (time.perf_counter() - start) * 1000
+                                _td["filler_ttfb_ms"] = (
+                                    time.perf_counter() - start
+                                ) * 1000
                             yield chunk
                             filler_text += chunk
                             if any(c in chunk for c in sentence_end_chars):
@@ -480,13 +530,23 @@ class ResponseOrchestrator:
                         if filler_text.strip():
                             _td["filler_fired"] = True
                             _td["filler_text"] = filler_text.strip()
-                            _td["filler_duration_ms"] = (time.perf_counter() - t_filler_start) * 1000
+                            _td["filler_duration_ms"] = (
+                                time.perf_counter() - t_filler_start
+                            ) * 1000
                             elapsed = (time.perf_counter() - start) * 1000
                             print(
                                 f"[ResponseOrchestrator] filler sent for RAG in {elapsed:.0f}ms: '{filler_text.strip()}'"
                             )
 
-                    async for chunk in self.handle_rag(user_id, text, history=history):
+                    async for chunk in self.handle_rag(
+                        user_id,
+                        text,
+                        history=history,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        rag_top_k=rag_top_k,
+                        rag_threshold=rag_threshold,
+                    ):
                         yield chunk
                     return
 
@@ -527,7 +587,9 @@ class ResponseOrchestrator:
                 if filler_text.strip():
                     _td["filler_fired"] = True
                     _td["filler_text"] = filler_text.strip()
-                    _td["filler_duration_ms"] = (time.perf_counter() - t_filler_start) * 1000
+                    _td["filler_duration_ms"] = (
+                        time.perf_counter() - t_filler_start
+                    ) * 1000
                     elapsed = (time.perf_counter() - start) * 1000
                     print(
                         f"[ResponseOrchestrator] filler sent in {elapsed:.0f}ms: '{filler_text.strip()}'"
@@ -544,7 +606,15 @@ class ResponseOrchestrator:
 
             if route == "rag":
                 main_first_task.cancel()
-                async for chunk in self.handle_rag(user_id, text, history=history):
+                async for chunk in self.handle_rag(
+                    user_id,
+                    text,
+                    history=history,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    rag_top_k=rag_top_k,
+                    rag_threshold=rag_threshold,
+                ):
                     yield chunk
                 return
 

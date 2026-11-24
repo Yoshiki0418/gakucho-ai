@@ -14,15 +14,14 @@ import soundfile as sf
 import style_bert_vits2.models.infer as infer_module
 import style_bert_vits2.nlp.bert_models as bert_models
 import torch
-from style_bert_vits2.models import commons
-from style_bert_vits2.nlp import clean_text
 from style_bert_vits2.constants import (
-    DEFAULT_LENGTH,
     DEFAULT_NOISE,
     DEFAULT_NOISEW,
     DEFAULT_SDP_RATIO,
     Languages,
 )
+from style_bert_vits2.models import commons
+from style_bert_vits2.nlp import clean_text
 from style_bert_vits2.tts_model import TTSModel
 
 from .base_tts import BaseTTS
@@ -82,7 +81,8 @@ class StyleBertVITS2_TTS(BaseTTS):
             raise RuntimeError(
                 "TTS_DEVICE=cuda が指定されていますが CUDA を初期化できません。"
                 f" PyTorch CUDA={torch.version.cuda},"
-                f" NVIDIA_VISIBLE_DEVICES={os.getenv('NVIDIA_VISIBLE_DEVICES', '(未設定)')}。"
+                " NVIDIA_VISIBLE_DEVICES="
+                f"{os.getenv('NVIDIA_VISIBLE_DEVICES', '(未設定)')}。"
                 " ホストで nvidia-smi を確認し、Driver/library version mismatch の場合は"
                 " NVIDIA ドライバ更新後にホストを再起動してください。"
             )
@@ -103,22 +103,40 @@ class StyleBertVITS2_TTS(BaseTTS):
         """日本語用DeBERTaトークナイザのパスを明示設定"""
         try:
             tokenizer_path = Path(
-                "/usr/local/lib/python3.10/dist-packages/style_bert_vits2/bert/deberta-v2-large-japanese-char-wwm"
+                "/usr/local/lib/python3.10/dist-packages/style_bert_vits2/bert/"
+                "deberta-v2-large-japanese-char-wwm"
             )
             bert_models.DEFAULT_BERT_TOKENIZER_PATHS[Languages.JP] = tokenizer_path
         except Exception as e:
             print(f"[警告] BERTトークナイザ設定に失敗: {e}")
 
+    def get_available_speakers(self) -> list[dict[str, str]]:
+        """Return only speakers provided by the loaded checkpoint."""
+        speakers = self.tts_model.hyper_parameters.data.spk2id
+        return [
+            {"id": str(speaker_id), "label": str(name)}
+            for name, speaker_id in sorted(speakers.items(), key=lambda item: item[1])
+        ]
+
+    def validate_speaker_id(self, speaker_id: int) -> int:
+        if isinstance(speaker_id, bool) or not isinstance(speaker_id, int):
+            raise ValueError("話者IDは整数で指定してください。")
+        allowed = {int(speaker["id"]) for speaker in self.get_available_speakers()}
+        if speaker_id not in allowed:
+            raise ValueError("選択した話者はこの音声モデルで利用できません。")
+        return speaker_id
+
     # ========== 音声生成共通ロジック ==========
-    def _synthesize(self, text: str) -> tuple[int, np.ndarray]:
+    def _synthesize(self, text: str, speaker_id: int = 0) -> tuple[int, np.ndarray]:
         """内部処理：音声波形を生成"""
         if not text.strip():
             raise ValueError("入力テキストが空です。")
 
+        speaker_id = self.validate_speaker_id(speaker_id)
         sr, audio = self.tts_model.infer(
             text=text,
             language=Languages.JP,
-            speaker_id=0,
+            speaker_id=speaker_id,
             sdp_ratio=DEFAULT_SDP_RATIO,
             noise=DEFAULT_NOISE,
             noise_w=DEFAULT_NOISEW,
@@ -127,15 +145,15 @@ class StyleBertVITS2_TTS(BaseTTS):
         return sr, audio
 
     # ========== 出力：ファイル書き出し ==========
-    def generate(self, text: str, output_path: str) -> Path:
-        sr, audio = self._synthesize(text)
+    def generate(self, text: str, output_path: str, speaker_id: int = 0) -> Path:
+        sr, audio = self._synthesize(text, speaker_id=speaker_id)
         sf.write(output_path, audio, sr)
         print(f"[TTS] 生成完了: {output_path}")
         return Path(output_path)
 
     # ========== 出力：Base64エンコード ==========
-    def synthesize_to_base64(self, text: str) -> str:
-        sr, audio = self._synthesize(text)
+    def synthesize_to_base64(self, text: str, speaker_id: int = 0) -> str:
+        sr, audio = self._synthesize(text, speaker_id=speaker_id)
         buffer = io.BytesIO()
         sf.write(buffer, audio, sr, format="WAV")
         buffer.seek(0)
@@ -164,7 +182,7 @@ class StyleBertVITS2_TTS(BaseTTS):
             return "I"
         return "sil"
 
-    def synthesize_with_visemes_to_base64(self, text: str) -> dict:
+    def synthesize_with_visemes_to_base64(self, text: str, speaker_id: int = 0) -> dict:
         """音声と、同じ推論で得た音素境界に基づくビセーム列を返す。
 
         VITS の duration predictor が生成に実際に使用した alignment を使うため、
@@ -173,6 +191,7 @@ class StyleBertVITS2_TTS(BaseTTS):
         if not text.strip():
             raise ValueError("入力テキストが空です。")
 
+        speaker_id = self.validate_speaker_id(speaker_id)
         model = self.tts_model
         hps = model.hyper_parameters
         net_g = model._TTSModel__net_g
@@ -211,7 +230,7 @@ class StyleBertVITS2_TTS(BaseTTS):
             ja_bert_tensor = ja_bert.to(model.device).unsqueeze(0)
             x_tst_lengths = torch.LongTensor([phones.size(0)]).to(model.device)
             style_tensor = torch.from_numpy(style_vector).to(model.device).unsqueeze(0)
-            sid_tensor = torch.LongTensor([0]).to(model.device)
+            sid_tensor = torch.LongTensor([speaker_id]).to(model.device)
 
             if use_jp_extra:
                 output = net_g.infer(
@@ -271,7 +290,11 @@ class StyleBertVITS2_TTS(BaseTTS):
             viseme = base_visemes[index]
             if viseme is None:
                 previous = next(
-                    (v for v in reversed(base_visemes[:index]) if v not in (None, "sil")),
+                    (
+                        v
+                        for v in reversed(base_visemes[:index])
+                        if v not in (None, "sil")
+                    ),
                     None,
                 )
                 following = next(

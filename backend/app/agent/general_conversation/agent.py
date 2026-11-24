@@ -1,12 +1,12 @@
 import os
 import time
+from dataclasses import replace
 from typing import AsyncIterator
 
 from agents import Agent, Runner
 from app.agent.general_conversation.domains import (
     LifePlanningAgent,
     LocationAgent,
-    PresidentAgent,
     ResearchAgent,
 )
 from app.agent.general_conversation.tools import get_current_time, get_weather
@@ -178,7 +178,9 @@ class GeneralConversationAgent:
         self.general_agent_endogenous = Agent(
             name="GeneralConversationAgent",
             model="gpt-5.2",
-            instructions=self.general_agent.instructions + "\n" + ENDOGENOUS_FILLER_INSTRUCTION,
+            instructions=self.general_agent.instructions
+            + "\n"
+            + ENDOGENOUS_FILLER_INSTRUCTION,
             tools=[get_current_time, get_weather],
             handoffs=[
                 research_agent,
@@ -240,7 +242,21 @@ class GeneralConversationAgent:
         self.ceremony_agent_endogenous = Agent(
             name="CeremonyConversationAgent",
             model="gpt-5.2",
-            instructions=self.ceremony_agent.instructions + "\n" + CEREMONY_ENDOGENOUS_FILLER_INSTRUCTION,
+            instructions=self.ceremony_agent.instructions
+            + "\n"
+            + CEREMONY_ENDOGENOUS_FILLER_INSTRUCTION,
+            tools=[get_current_time, get_weather],
+            handoffs=[],
+        )
+
+        self.assistant_agent = Agent(
+            name="AssistantAgent",
+            model=self.DEFAULT_MODEL,
+            instructions=(
+                "あなたは一般的なAIアシスタントです。日本語で親切かつ簡潔に回答してください。"
+                "実在人物や大学の学長を名乗らず、大学を代表する発言をしないでください。"
+                "不明な事実を作らず、必要に応じて確認を求めてください。"
+            ),
             tools=[get_current_time, get_weather],
             handoffs=[],
         )
@@ -252,42 +268,58 @@ class GeneralConversationAgent:
         # }
 
     def _resolve_agent(
-        self, mode: str, filler_mode: str, llm_model: str | None = None
+        self,
+        mode: str,
+        filler_mode: str,
+        llm_model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> Agent:
-        """mode / filler_mode / llm_model から使用する Agent を決定する。
-
-        既定モデル(gpt-5.2)なら事前生成済みの Agent をそのまま使う（従来挙動を維持）。
-        別モデルが指定された場合のみ、指示文・ツール・handoff を引き継いだ
-        新しい Agent をモデル差し替えで生成する。
-        """
+        """Clone only this request's agent/settings; never mutate shared agents."""
         endogenous = filler_mode == "endogenous"
-        if mode == "ceremony":
+        if mode == "assistant":
+            base = self.assistant_agent
+        elif mode == "ceremony":
             base = self.ceremony_agent_endogenous if endogenous else self.ceremony_agent
         else:
             base = self.general_agent_endogenous if endogenous else self.general_agent
 
         model = llm_model or self.DEFAULT_MODEL
-        if model == self.DEFAULT_MODEL:
+        if model == self.DEFAULT_MODEL and temperature is None and max_tokens is None:
             return base
-
-        return Agent(
-            name=base.name,
-            model=model,
-            instructions=base.instructions,
-            tools=base.tools,
-            handoffs=base.handoffs,
-        )
+        agent = base.clone(model=model)
+        overrides = {}
+        if temperature is not None:
+            overrides["temperature"] = temperature
+        if max_tokens is not None:
+            overrides["max_tokens"] = max_tokens
+        if overrides:
+            agent = agent.clone(
+                model_settings=replace(agent.model_settings, **overrides)
+            )
+        return agent
 
     async def generate(
-        self, user_id: str, message: str, history: list[dict] | None = None, mode: str = "general", **kwargs
+        self,
+        user_id: str,
+        message: str,
+        history: list[dict] | None = None,
+        mode: str = "general",
+        **kwargs,
     ) -> str:
         # 履歴がある場合はメッセージリスト形式で渡す
         if history:
             input_messages = history + [{"role": "user", "content": message}]
         else:
             input_messages = message
-        
-        target_agent = self.ceremony_agent if mode == "ceremony" else self.general_agent
+
+        target_agent = self._resolve_agent(
+            mode,
+            kwargs.get("filler_mode", "dynamic"),
+            kwargs.get("llm_model"),
+            kwargs.get("temperature"),
+            kwargs.get("max_tokens"),
+        )
         result = await Runner.run(target_agent, input_messages)
         return result.final_output
 
@@ -300,6 +332,8 @@ class GeneralConversationAgent:
         filler_mode: str = "dynamic",
         timing_data: dict | None = None,
         llm_model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """
@@ -312,7 +346,9 @@ class GeneralConversationAgent:
         else:
             input_messages = message
 
-        target_agent = self._resolve_agent(mode, filler_mode, llm_model)
+        target_agent = self._resolve_agent(
+            mode, filler_mode, llm_model, temperature, max_tokens
+        )
         stream_result = Runner.run_streamed(target_agent, input_messages)
 
         # 論文用ログ: ツール/handoff 前テキスト（endogenousフィラー）と TTFT を計測
@@ -325,9 +361,8 @@ class GeneralConversationAgent:
             if not (event.type == "raw_response_event" and hasattr(event.data, "type")):
                 continue
 
-            if (
-                event.data.type == "response.output_text.delta"
-                and hasattr(event.data, "delta")
+            if event.data.type == "response.output_text.delta" and hasattr(
+                event.data, "delta"
             ):
                 delta = event.data.delta
                 if delta:
