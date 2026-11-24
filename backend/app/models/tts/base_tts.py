@@ -12,6 +12,6 @@ class BaseTTS(ABC):
         return self._model_name
 
     @abstractmethod
-    def synthesize_to_base64(self, text: str) -> str:
+    def synthesize_to_base64(self, text: str, speaker_id: int = 0) -> str:
         """テキストを音声に変換し、Base64 エンコードした文字列を返す"""
         ...

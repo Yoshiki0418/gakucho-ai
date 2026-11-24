@@ -138,8 +138,9 @@ def load_token() -> str:
     return ""
 
 
-def evaluate_response(client: "anthropic.Anthropic", query: str, response: str,
-                       category: str, model: str) -> dict:
+def evaluate_response(
+    client: "anthropic.Anthropic", query: str, response: str, category: str, model: str
+) -> dict:
     domain_hint = ""
     if category in DOMAIN_EXPECTATIONS:
         domain_hint = (
@@ -161,7 +162,7 @@ def evaluate_response(client: "anthropic.Anthropic", query: str, response: str,
             if m:
                 return json.loads(m.group(0))
         except anthropic.RateLimitError:
-            wait = 10 * (2 ** attempt)
+            wait = 10 * (2**attempt)
             print(f"\n  [RateLimit] {wait}s 待機...", end="", flush=True)
             time.sleep(wait)
         except Exception as e:
@@ -179,7 +180,9 @@ def main():
     parser.add_argument("--multi", required=True)
     parser.add_argument("--single", required=True)
     parser.add_argument("--model", default="claude-haiku-4-5")
-    parser.add_argument("--sleep", type=float, default=4.0, help="APIコール間スリープ秒数")
+    parser.add_argument(
+        "--sleep", type=float, default=4.0, help="APIコール間スリープ秒数"
+    )
     args = parser.parse_args()
 
     token = load_token()
@@ -191,7 +194,9 @@ def main():
 
     # --- データ読み込み & フィルタ ---
     df_multi = pd.read_csv(args.multi)
-    df_multi["condition"] = df_multi["condition"].replace({"dynamic_filler": "multi_agent"})
+    df_multi["condition"] = df_multi["condition"].replace(
+        {"dynamic_filler": "multi_agent"}
+    )
     df_multi = df_multi[df_multi["condition"] == "multi_agent"].copy()
 
     df_single = pd.read_csv(args.single)
@@ -202,7 +207,9 @@ def main():
 
     # dialogueルートのみ
     combined = combined[combined["route"] == "dialogue"].copy()
-    combined = combined[combined["response_text"].notna() & (combined["response_text"] != "")].copy()
+    combined = combined[
+        combined["response_text"].notna() & (combined["response_text"] != "")
+    ].copy()
     combined = combined.reset_index(drop=True)
 
     total = len(combined)
@@ -214,10 +221,16 @@ def main():
     rationale_cols = {m: [] for m in METRICS}
 
     for i, (_, row) in enumerate(combined.iterrows(), 1):
-        print(f"Evaluating {i}/{total} ({row['condition']}, {row['category']})...", end="\r")
+        print(
+            f"Evaluating {i}/{total} ({row['condition']}, {row['category']})...",
+            end="\r",
+        )
         result = evaluate_response(
-            client, str(row["query"]), str(row["response_text"]),
-            str(row["category"]), args.model
+            client,
+            str(row["query"]),
+            str(row["response_text"]),
+            str(row["category"]),
+            args.model,
         )
         for m in METRICS:
             score_cols[m].append(result.get(m, {}).get("score", 0))
@@ -233,6 +246,7 @@ def main():
     # --- 結果集計 ---
     try:
         from scipy.stats import mannwhitneyu
+
         has_scipy = True
     except ImportError:
         has_scipy = False
@@ -243,25 +257,31 @@ def main():
 
     METRIC_LABELS = {
         "instruction_following": "Instruction Following",
-        "persona_consistency":   "Persona Consistency",
-        "task_success":          "Task Success",
-        "specialization_depth":  "Specialization Depth",
-        "domain_appropriateness":"Domain Appropriateness",
-        "response_precision":    "Response Precision",
+        "persona_consistency": "Persona Consistency",
+        "task_success": "Task Success",
+        "specialization_depth": "Specialization Depth",
+        "domain_appropriateness": "Domain Appropriateness",
+        "response_precision": "Response Precision",
     }
 
     for m, label in METRIC_LABELS.items():
         col = f"{m}_score"
         mdf = combined[combined["condition"] == "multi_agent"]
         sdf = combined[combined["condition"] == "single_agent"]
-        mv = mdf[col].dropna(); mv = mv[mv > 0]
-        sv = sdf[col].dropna(); sv = sv[sv > 0]
+        mv = mdf[col].dropna()
+        mv = mv[mv > 0]
+        sv = sdf[col].dropna()
+        sv = sv[sv > 0]
 
         diff = mv.mean() - sv.mean()
         sig = ""
         if has_scipy and len(mv) > 0 and len(sv) > 0:
             _, p = mannwhitneyu(mv, sv, alternative="greater")
-            sig = f"p={p:.4f}  " + ("★★★" if p < 0.001 else "★★" if p < 0.01 else "★" if p < 0.05 else "n.s.")
+            sig = f"p={p:.4f}  " + (
+                "★★★"
+                if p < 0.001
+                else "★★" if p < 0.01 else "★" if p < 0.05 else "n.s."
+            )
 
         print(f"\n{label}")
         print(f"  Multi  (n={len(mv)}): {mv.mean():.2f}")

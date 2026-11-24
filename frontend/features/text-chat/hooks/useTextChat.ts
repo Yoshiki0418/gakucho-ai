@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { buildChatQuery, type InferenceRequest } from '@/features/inference-settings/settings'
 
 interface Message {
   id: string
@@ -40,6 +41,7 @@ type SSEMetadata = {
 type SSEAny = SSEText | SSEAudio | SSEFrame | SSEDone | SSEMetadata
 
 export function useTextChat(endpoint: string) {
+  const [error, setError] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
   const [avatarFrameSrc, setAvatarFrameSrc] = useState<string | null>(null) // ★ 最新フレーム
@@ -129,6 +131,7 @@ export function useTextChat(endpoint: string) {
   }
 
   const resetChat = async () => {
+    setError(null)
     stopAllAudio()
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
@@ -286,7 +289,10 @@ export function useTextChat(endpoint: string) {
     llmModel?: string,
     fillerModel?: string,
     lipSyncMode: LipSyncMode = 'legacy',
+    inference?: InferenceRequest,
   ) => {
+    const query = buildChatQuery({ text: userText, mode, fillerMode, llmModel, fillerModel, inference })
+    setError(null)
     // 新しい会話のたびにオーディオはリセット
     stopAllAudio()
     // 直前の stop と新しい start が前後しても、新しい発話を消さないようIDを分ける。
@@ -305,20 +311,13 @@ export function useTextChat(endpoint: string) {
 
     // NEXT_PUBLIC_API_BASE_URL が空なら相対URL（nginx経由）、設定があればそれを使う
     const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || ''
-    // モデル選択が指定されていればクエリに付与（未指定ならバックエンド既定モデル）
-    const modelParams =
-      (llmModel ? `&llm_model=${encodeURIComponent(llmModel)}` : '') +
-      (fillerModel ? `&filler_model=${encodeURIComponent(fillerModel)}` : '')
-    const fullUrl = apiBase
-      ? `${apiBase}${endpoint}?text=${encodeURIComponent(userText)}&mode=${mode}&filler_mode=${fillerMode}${modelParams}`
-      : `${endpoint}?text=${encodeURIComponent(userText)}&mode=${mode}&filler_mode=${fillerMode}${modelParams}`
-
-    console.log('[useTextChat] SSE connect to:', fullUrl)
+    const fullUrl = `${apiBase}${endpoint}?${query}`
 
     const es = new EventSource(fullUrl)
     eventSourceRef.current = es
 
     es.onmessage = (event) => {
+      if (eventSourceRef.current !== es) return
       try {
         const data: SSEAny = JSON.parse(event.data)
 
@@ -414,6 +413,8 @@ export function useTextChat(endpoint: string) {
     }
 
     es.onerror = (err) => {
+      if (eventSourceRef.current !== es) return
+      setError('応答を取得できませんでした。選択したモデルと設定、接続状態を確認して再送してください。')
       console.error('❌ SSE Error:', err)
       es.close()
       eventSourceRef.current = null
@@ -477,6 +478,7 @@ export function useTextChat(endpoint: string) {
   }, [])
 
   return {
+    error,
     messages,
     startChat,
     speakingMessageId,

@@ -12,6 +12,8 @@ import { ModeToggle, InputMode } from '@/components/molecules/ModeToggle'
 import { VoiceInputArea } from '@/components/organisms/VoiceInputArea'
 import { ZOOM, clampZoom } from '@/features/avatar/zoom'
 import type { LipSyncMode } from '@/features/text-chat/hooks/useTextChat'
+import { InferenceFields } from '@/features/inference-settings/InferenceFields'
+import { EMPTY_DRAFT, type ChatMode, type InferenceDraft, type SettingsCatalog } from '@/features/inference-settings/settings'
 
 const ScrollableBody = styled(Flex)`
   /* スクロールバーの幅 */
@@ -57,22 +59,6 @@ const FILLER_MODE_OPTIONS: { value: FillerMode; label: string; description: stri
   { value: 'endogenous', label: '内因的フィラー', description: '親エージェント自身がツール呼び出し前に自己判断で出力（新実験条件）' },
 ]
 
-// メイン会話（マルチエージェント）で使うモデル
-const MAIN_MODEL_OPTIONS: { value: string; label: string; description: string }[] = [
-  { value: 'gpt-4o', label: 'GPT-4o', description: '汎用・高速な標準モデル' },
-  { value: 'gpt-5.2', label: 'GPT-5.2（現状モデル）', description: '現在の既定モデル' },
-  { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', description: 'GPT-5.6 系バリアント' },
-  { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', description: 'GPT-5.6 系バリアント' },
-  { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', description: 'GPT-5.6 系バリアント' },
-]
-
-// 動的フィラー生成に使うモデル
-const FILLER_MODEL_OPTIONS: { value: string; label: string; description: string }[] = [
-  { value: 'gpt-5.2', label: 'GPT-5.2（現状モデル）', description: '現在の既定フィラーモデル' },
-  { value: 'gpt-4o', label: 'GPT-4o', description: '汎用・高速' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o mini', description: '軽量・低レイテンシ' },
-]
-
 // UE の口パクの駆動方式。phoneme は TTS の alignment から得た音素長で
 // Face Control Rig を動かす（発話と口形が一致する）。legacy は従来の
 // 口パクアニメーションを再生中だけ有効にする。
@@ -81,11 +67,13 @@ const LIP_SYNC_OPTIONS: { value: LipSyncMode; label: string; description: string
   { value: 'phoneme', label: '音素同期（推奨）', description: 'TTSの音素長に合わせて口形を動かす' },
 ]
 
-type SettingsSection = 'general' | 'model' | 'filler' | 'mode'
+type SettingsSection = 'general' | 'model' | 'inference' | 'audio' | 'filler' | 'mode'
 
 const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: 'general', label: '一般' },
   { id: 'model', label: 'モデル' },
+  { id: 'inference', label: '推論・検索' },
+  { id: 'audio', label: '音声' },
   { id: 'filler', label: 'フィラー' },
   { id: 'mode', label: 'モード' },
 ]
@@ -104,8 +92,8 @@ interface ChatPanelProps {
   onInputModeChange?: (mode: InputMode) => void
   onResetChat?: () => void
   onInterrupt?: () => void
-  appMode?: 'general' | 'ceremony'
-  onToggleMode?: () => void
+  appMode?: ChatMode
+  onModeChange?: (mode: ChatMode) => void
   width?: number | string
   fillerMode?: string
   onFillerModeChange?: (mode: string) => void
@@ -113,6 +101,13 @@ interface ChatPanelProps {
   onMainModelChange?: (model: string) => void
   fillerModel?: string
   onFillerModelChange?: (model: string) => void
+  settingsCatalog?: SettingsCatalog | null
+  inferenceDraft?: InferenceDraft
+  onInferenceChange?: (key: keyof InferenceDraft, value: string) => void
+  settingsLoading?: boolean
+  settingsError?: string | null
+  onReloadSettings?: () => void
+  errorMessage?: string | null
   qrEnabled?: boolean
   onQrEnabledChange?: (enabled: boolean) => void
   /** アバター映像の切り抜き倍率 */
@@ -136,14 +131,21 @@ export default function ChatPanel({
   onResetChat,
   onInterrupt,
   appMode = 'general',
-  onToggleMode,
+  onModeChange,
   width = '35%',
   fillerMode = 'endogenous',
   onFillerModeChange,
-  mainModel = 'gpt-5.6-sol',
+  mainModel = '',
   onMainModelChange,
-  fillerModel = 'gpt-5.2',
+  fillerModel = '',
   onFillerModelChange,
+  settingsCatalog = null,
+  inferenceDraft = EMPTY_DRAFT,
+  onInferenceChange,
+  settingsLoading = false,
+  settingsError = null,
+  onReloadSettings,
+  errorMessage = null,
   qrEnabled = true,
   onQrEnabledChange,
   zoom = ZOOM.default,
@@ -155,8 +157,37 @@ export default function ChatPanel({
   const [internalMode, setInternalMode] = useState<InputMode>('text')
   const inputMode = inputModeProp ?? internalMode
   const [voiceMode, setVoiceMode] = useState<'ptt' | 'vad'>('ptt')
+  const [speechSession, setSpeechSession] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('general')
+  const settingsDialogRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!showSettings) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialog = settingsDialogRef.current
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]') ?? [])
+    focusable()[0]?.focus()
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowSettings(false)
+      if (event.key !== 'Tab') return
+      const elements = focusable()
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last?.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      previousFocus?.focus()
+    }
+  }, [showSettings])
 
   const handleModeChange = (mode: InputMode) => {
     if (!inputModeProp) {
@@ -179,12 +210,15 @@ export default function ChatPanel({
     selected: string,
     onSelect: (value: string) => void,
   ) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div role="radiogroup" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {options.map((opt) => {
         const isSelected = selected === opt.value
         return (
           <button
             key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
             onClick={() => onSelect(opt.value)}
             style={{
               background: isSelected ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.03)',
@@ -321,7 +355,8 @@ export default function ChatPanel({
               color: '#cbd5e1',
               position: 'relative',
             }}
-            title="実験設定"
+            title="会話の設定"
+            aria-label="会話の設定"
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(139,92,246,0.20)'
               e.currentTarget.style.border = '1px solid rgba(139,92,246,0.4)'
@@ -349,7 +384,10 @@ export default function ChatPanel({
           </button>
 
           <button
-            onClick={() => onResetChat?.()}
+            onClick={() => {
+              setSpeechSession((session) => session + 1)
+              onResetChat?.()
+            }}
             style={{
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
@@ -401,13 +439,17 @@ export default function ChatPanel({
           >
             <div
               onClick={(e) => e.stopPropagation()}
+              ref={settingsDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="会話の設定"
               style={{
                 background: 'linear-gradient(160deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
                 border: '1px solid rgba(148,163,184,0.2)',
                 borderRadius: 16,
                 width: 660,
                 maxWidth: '92vw',
-                height: 460,
+                height: 560,
                 maxHeight: '85vh',
                 boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
                 display: 'flex',
@@ -416,7 +458,7 @@ export default function ChatPanel({
             >
               {/* ===== 左サイドナビ ===== */}
               <div style={{
-                width: 150,
+                width: 124,
                 flexShrink: 0,
                 borderRight: '1px solid rgba(148,163,184,0.15)',
                 background: 'rgba(2,6,23,0.5)',
@@ -465,6 +507,7 @@ export default function ChatPanel({
                 <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>
                   <button
                     onClick={() => setShowSettings(false)}
+                    aria-label="設定を閉じる"
                     style={{
                       background: 'rgba(255,255,255,0.05)',
                       border: '1px solid rgba(148,163,184,0.15)',
@@ -483,7 +526,12 @@ export default function ChatPanel({
                   </button>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 24px 24px' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 20px 24px' }}>
+                  {settingsLoading && <p role="status" style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>利用できる設定を読み込んでいます…</p>}
+                  {settingsError && <div role="alert" style={{ color: '#fda4af', fontSize: '0.8rem', marginBottom: 16 }}>
+                    <p>{settingsError} 既定の設定で会話できます。</p>
+                    <button type="button" onClick={onReloadSettings} style={{ padding: '6px 12px', borderRadius: 6, cursor: 'pointer' }}>設定を再読み込み</button>
+                  </div>}
                   {/* --- 一般 --- */}
                   {settingsSection === 'general' && (
                     <div>
@@ -576,15 +624,27 @@ export default function ChatPanel({
                   {/* --- モデル --- */}
                   {settingsSection === 'model' && (
                     <div>
-                      {sectionHeading('モデル', '日常対話（マルチエージェント）で使うモデル')}
-                      {renderRadioList(MAIN_MODEL_OPTIONS, mainModel, (v) => onMainModelChange?.(v))}
+                      {sectionHeading('モデル', 'この会話で最初に応答するAIのモデル')}
+                      {settingsCatalog && renderRadioList(settingsCatalog.llm_models.map((model) => ({ value: model.id, label: model.label, description: model.supports_temperature ? '応答の温度を変更できます' : 'このモデルでは応答の温度を変更できません' })), mainModel, (v) => onMainModelChange?.(v))}
+                      <p style={{ color: '#94a3b8', fontSize: '0.75rem', lineHeight: 1.6 }}>専門担当AIと学内検索の回答モデルは、この選択では変わりません。</p>
+                    </div>
+                  )}
+
+                  {(settingsSection === 'inference' || settingsSection === 'audio') && (
+                    <div>
+                      {sectionHeading(settingsSection === 'audio' ? '音声' : '推論・検索', 'この画面から送る会話に適用する設定')}
+                      {settingsCatalog && <InferenceFields catalog={settingsCatalog} draft={inferenceDraft} modelId={mainModel} mode={appMode}
+                        section={settingsSection} onChange={(key, value) => onInferenceChange?.(key, value)} />}
                     </div>
                   )}
 
                   {/* --- フィラー --- */}
                   {settingsSection === 'filler' && (
                     <div>
-                      {sectionHeading('フィラー', 'フィラー挿入条件の切り替え')}
+                      {sectionHeading('フィラー', '応答を待つ間のつなぎ発話')}
+                      {appMode === 'assistant' && <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>一般AIモードではフィラーを使いません。</p>}
+                      {appMode === 'ceremony' && <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>式典モードでは外部フィラーを使いません。</p>}
+                      <fieldset disabled={appMode === 'assistant'} style={{ border: 0, padding: 0, margin: 0, opacity: appMode === 'assistant' ? 0.5 : 1 }}>
                       {renderRadioList(FILLER_MODE_OPTIONS, fillerMode, (v) => onFillerModeChange?.(v))}
 
                       {/* 外部動的フィラー選択時のみ、生成モデルを選べる */}
@@ -593,31 +653,33 @@ export default function ChatPanel({
                           <p style={{ margin: '0 0 8px', color: '#cbd5e1', fontSize: '0.82rem', fontWeight: 700 }}>
                             動的フィラー生成モデル
                           </p>
-                          {renderRadioList(FILLER_MODEL_OPTIONS, fillerModel, (v) => onFillerModelChange?.(v))}
+                          {settingsCatalog && renderRadioList(settingsCatalog.filler_models.map((model) => ({ value: model.id, label: model.label, description: '応答を待つ間のつなぎ発話に使用します' })), fillerModel, (v) => onFillerModelChange?.(v))}
                         </div>
                       )}
+                      </fieldset>
                     </div>
                   )}
 
                   {/* --- モード --- */}
                   {settingsSection === 'mode' && (
                     <div>
-                      {sectionHeading('モード', '一般モード / 式典モードの切り替え')}
+                      {sectionHeading('モード', '会話するAIの役割と応答スタイル')}
                       {renderRadioList(
                         [
-                          { value: 'general', label: '一般モード', description: 'フィラー・QR表示などフル機能' },
-                          { value: 'ceremony', label: '式典モード', description: 'フィラー無効・簡潔応答（式典向け）' },
+                          { value: 'general', label: '学長モード', description: '学長AIとして会話し、必要に応じて学内情報や専門担当AIを使います' },
+                          { value: 'assistant', label: '一般AIモード', description: '学長の役割を持たないAIと会話します。学内検索とフィラーは使いません' },
+                          { value: 'ceremony', label: '式典モード', description: '学長AIが式典向けに簡潔に応答します。外部フィラーは使いません' },
                         ],
                         appMode,
                         (v) => {
-                          if (v !== appMode) onToggleMode?.()
+                          if (v === 'general' || v === 'assistant' || v === 'ceremony') onModeChange?.(v)
                         },
                       )}
                     </div>
                   )}
 
-                  <p style={{ margin: '20px 0 0', color: '#334155', fontSize: '0.7rem', textAlign: 'center', lineHeight: 1.5 }}>
-                    次の送信から新しい条件が適用されます
+                  <p style={{ margin: '20px 0 0', color: '#94a3b8', fontSize: '0.75rem', textAlign: 'center', lineHeight: 1.5 }}>
+                    次の送信から、この画面の会話に適用します。他の利用者の設定は変わりません。
                   </p>
                 </div>
               </div>
@@ -715,8 +777,11 @@ export default function ChatPanel({
               </div>
             )}
           </div>
+          {errorMessage && <p role="alert" style={{ color: '#fda4af', fontSize: '0.8rem', margin: 0 }}>{errorMessage}</p>}
           {inputMode === 'text' ? (
             <ChatInputArea
+              key={speechSession}
+              sttModel={inferenceDraft.stt_model}
               value={inputValue}
               onChange={onChange}
               onMicClick={onMicClick}
@@ -727,6 +792,8 @@ export default function ChatPanel({
             />
           ) : (
             <VoiceInputArea
+              key={speechSession}
+              sttModel={inferenceDraft.stt_model}
               disabled={disabled}
               isAISpeaking={Boolean(speakingMessageId)}
               onInterrupt={onInterrupt}

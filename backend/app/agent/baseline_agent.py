@@ -1,4 +1,3 @@
-import os
 from typing import AsyncIterator
 
 from agents import Agent, Runner, WebSearchTool
@@ -10,12 +9,14 @@ from app.agent.general_conversation.tools import (
 )
 from app.prompts.president_persona import get_president_persona
 
+
 class BaselineAgent:
     """
     単一LLMモデル（ベースライン）による応答エージェント。
     Orchestratorによるルーティング後、日常対話・各ドメイン（学長、リサーチ、生活相談、位置情報）
     の回答を全て単一の巨大プロンプトとツール群で処理します。
     """
+
     def __init__(self):
         president_persona = get_president_persona()
         self.agent = Agent(
@@ -85,12 +86,14 @@ class BaselineAgent:
             handoffs=[],
         )
 
-    async def stream_generate(self, user_id: str, message: str, history: list[dict] | None = None) -> AsyncIterator[str]:
+    async def stream_generate(
+        self, user_id: str, message: str, history: list[dict] | None = None
+    ) -> AsyncIterator[str]:
         if history:
             input_messages = history + [{"role": "user", "content": message}]
         else:
             input_messages = message
-            
+
         stream_result = Runner.run_streamed(self.agent, input_messages)
         async for event in stream_result.stream_events():
             if (

@@ -105,14 +105,20 @@ class RAGStore:
         embeddings = F.normalize(embeddings, p=2, dim=1)
 
         # NaN/Inf を含む embedding が出た場合は pgvector に拒否されるため弾く
-        nan_mask = torch.isnan(embeddings).any(dim=1) | torch.isinf(embeddings).any(dim=1)
+        nan_mask = torch.isnan(embeddings).any(dim=1) | torch.isinf(embeddings).any(
+            dim=1
+        )
         n_nan = int(nan_mask.sum().item())
         if n_nan > 0:
-            print(f"⚠️ {n_nan} 件の embedding に NaN/Inf が含まれていたためスキップします。")
+            print(
+                f"⚠️ {n_nan} 件の embedding に NaN/Inf が含まれていたためスキップします。"
+            )
 
         # ★ autocommit=True 前提なので connection の with はやめる
         with self.conn.cursor() as cur:
-            for idx, (context, emb, source_url) in enumerate(zip(contexts, embeddings, source_urls)):
+            for idx, (context, emb, source_url) in enumerate(
+                zip(contexts, embeddings, source_urls)
+            ):
                 if nan_mask[idx].item():
                     skipped += 1
                     continue

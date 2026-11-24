@@ -7,17 +7,17 @@ import { AvatarPanel } from '@/components/organisms/AvatarPanel'
 import { QRCodeDisplay } from '@/components/organisms/QRCodeDisplay'
 import { ZOOM } from '@/features/avatar/zoom'
 import type { LipSyncMode } from '@/features/text-chat/hooks/useTextChat'
+import { useInferenceSettings } from '@/features/inference-settings/useInferenceSettings'
+import { validateDraft, type ChatMode } from '@/features/inference-settings/settings'
 
 export default function ChatDemoPage() {
   const [inputValue, setInputValue] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [closedUrls, setClosedUrls] = useState<Set<string>>(new Set())
-  const [appMode, setAppMode] = useState<'general' | 'ceremony'>('general')
+  const [appMode, setAppMode] = useState<ChatMode>('general')
   const [fillerMode, setFillerMode] = useState<string>('endogenous')
-  // メイン会話モデル（既定= gpt-5.6-sol）
-  const [mainModel, setMainModel] = useState<string>('gpt-5.6-sol')
-  // 動的フィラー生成に使うモデル（既定=現状モデル gpt-5.2）
-  const [fillerModel, setFillerModel] = useState<string>('gpt-5.2')
+  const settings = useInferenceSettings()
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null)
   // QRコード表示（モード切替とは独立して個別トグル）
   const [qrEnabled, setQrEnabled] = useState<boolean>(true)
   // UE アバターの口の動かし方（設定モーダルの「一般」タブ）
@@ -53,7 +53,7 @@ export default function ChatDemoPage() {
     }
   }, [isResizing])
 
-  const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc, latestUrl, interruptChat } =
+  const { messages, startChat, speakingMessageId, resetChat, avatarFrameSrc, latestUrl, interruptChat, error: chatError } =
     useTextChat('/api/text-chat/char-stream-orchestrator')
 
   const handleMicClick = () => {
@@ -64,10 +64,15 @@ export default function ChatDemoPage() {
     const message = value.trim()
     if (!message) return
 
+    const checked = settings.catalog ? validateDraft(settings.draft, settings.catalog, settings.mainModel, appMode) : null
+    if (checked && !checked.valid) {
+      setSettingsMessage('設定に入力エラーがあります。設定画面で赤字の項目を修正してください。')
+      return
+    }
+    setSettingsMessage(null)
     setIsSending(true)
     try {
-      // 動的フィラー時のみフィラーモデルを送る（他モードでは無視されるが無害）
-      await startChat(message, appMode, fillerMode, mainModel, fillerModel, lipSyncMode)
+      await startChat(message, appMode, fillerMode, settings.mainModel, settings.fillerModel, lipSyncMode, checked?.request)
     } finally {
       setIsSending(false)
     }
@@ -126,14 +131,21 @@ export default function ChatDemoPage() {
           speakingMessageId={speakingMessageId}
           onInterrupt={interruptChat}
           appMode={appMode}
-          onToggleMode={() => setAppMode((prev) => (prev === 'general' ? 'ceremony' : 'general'))}
+          onModeChange={setAppMode}
           width={chatWidth}
           fillerMode={fillerMode}
           onFillerModeChange={setFillerMode}
-          mainModel={mainModel}
-          onMainModelChange={setMainModel}
-          fillerModel={fillerModel}
-          onFillerModelChange={setFillerModel}
+          mainModel={settings.mainModel}
+          onMainModelChange={settings.changeMainModel}
+          fillerModel={settings.fillerModel}
+          onFillerModelChange={settings.setFillerModel}
+          settingsCatalog={settings.catalog}
+          inferenceDraft={settings.draft}
+          onInferenceChange={settings.changeDraft}
+          settingsLoading={settings.isLoading}
+          settingsError={settings.error}
+          onReloadSettings={settings.reload}
+          errorMessage={settingsMessage || chatError}
           qrEnabled={qrEnabled}
           onQrEnabledChange={setQrEnabled}
           zoom={zoom}

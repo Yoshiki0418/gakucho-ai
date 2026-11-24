@@ -63,7 +63,7 @@ class RAGModule:
 
         # --- コンテキスト整形 ---
         def format_doc(i: int, d: Dict[str, Any]) -> str:
-            text = f"[{i+1}] (score={d['similarity']:.3f})\n{d['context']}"
+            text = f"[{i + 1}] (score={d['similarity']:.3f})\n{d['context']}"
             if d.get("source_url"):
                 text += f"\n参考URL: {d['source_url']}"
             return text
@@ -127,6 +127,8 @@ class RAGModule:
         template_name: Optional[str] = None,
         history: Optional[List[dict[str, str]]] = None,
         tool_calls: Optional[List[dict[str, str]]] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> AsyncIterator[str]:
         """
         🔹 ストリーミング版 RAG 実行
@@ -143,7 +145,7 @@ class RAGModule:
             message=prompt,
             history=[],
             tool_calls=tool_calls,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
+            max_tokens=self.max_tokens if max_tokens is None else max_tokens,
+            temperature=self.temperature if temperature is None else temperature,
         ):
             yield chunk
