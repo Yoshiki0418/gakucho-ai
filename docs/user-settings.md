@@ -49,3 +49,11 @@ Whisper録音は `POST /api/speech/transcribe` へ `file` と `model` をmultipa
 外部LLM・実DBへ接続しないテストで、値の検証、UIからのパラメータ送信、推論への引渡し、同時リクエスト間の分離、音声モデルの選択と未準備時の扱いを確認する。モデルの品質評価や本番でのマイク入力は別の運用確認となる。
 
 画像機能と画像モデル選択はIssue #167に分離し、この設定機能には含めない。
+
+## 空欄時の値と表示
+
+温度に対応する会話AIはResponses APIの初期値1.0、学内検索の回答はRAGModuleの0.7を使用する。温度非対応モデルには「変更不可」と表示する。会話AIの最大トークン数はアプリから指定していないため、数値の既定値があるようには表示しない。学内検索の回答は200トークン。Top-kは5件、閾値は0.25が初期値となる。
+
+画面には処理別の空欄時の値・設定範囲・入力例を表示する。入力例は既定値ではなく、利用者が調整を始めるための目安。表示改善によって実際の推論設定や空欄時の送信内容は変更しない。
+
+会話AIの温度の根拠: [Responses API仕様](https://developers.openai.com/api/reference/resources/responses/methods/create)。学内検索の値は `backend/app/agent/modules/rag_module.py` の初期値に基づく。

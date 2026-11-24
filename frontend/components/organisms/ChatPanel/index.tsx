@@ -625,7 +625,7 @@ export default function ChatPanel({
                   {settingsSection === 'model' && (
                     <div>
                       {sectionHeading('モデル', 'この会話で最初に応答するAIのモデル')}
-                      {settingsCatalog && renderRadioList(settingsCatalog.llm_models.map((model) => ({ value: model.id, label: model.label, description: model.supports_temperature ? '応答の温度を変更できます' : '応答の温度はモデルの既定値を使います' })), mainModel, (v) => onMainModelChange?.(v))}
+                      {settingsCatalog && renderRadioList(settingsCatalog.llm_models.map((model) => ({ value: model.id, label: model.label, description: model.supports_temperature ? '応答の温度を変更できます' : 'このモデルでは応答の温度を変更できません' })), mainModel, (v) => onMainModelChange?.(v))}
                       <p style={{ color: '#94a3b8', fontSize: '0.75rem', lineHeight: 1.6 }}>専門担当AIと学内検索の回答モデルは、この選択では変わりません。</p>
                     </div>
                   )}

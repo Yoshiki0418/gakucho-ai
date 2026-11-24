@@ -44,26 +44,33 @@ export function InferenceFields({ catalog, draft, modelId, mode, section, onChan
       </label>
     </>
   )
+  const usesRag = mode !== 'assistant'
+  // Responses API defaults temperature to 1; RAGModule defaults to 0.7 / 200.
+  // Parent Agent leaves max_output_tokens unspecified; it has no app-defined numeric default.
+  const temperatureDefault = temperatureSupported
+    ? `空欄時：会話AIは1.0${usesRag ? '、学内検索の回答は0.7' : ''}。`
+    : `このモデルでは温度を変更できません。${usesRag ? '学内検索の回答は0.7を使用します。' : ''}`
+  const tokenDefault = `空欄時：会話AIは上限を指定せずモデル側で決定${usesRag ? '、学内検索の回答は200トークン' : ''}。`
   const fields = [
-    { key: 'temperature' as const, label: '応答の変化の大きさ（temperature）', optional: true, step: '0.1', hint: temperatureSupported ? '空欄はモデルの既定値。大きいほど表現が多様になります。' : 'このモデルはtemperatureの指定に対応していません。モデルの既定値を使います。' },
-    { key: 'max_tokens' as const, label: '生成トークン数の上限', optional: true, step: '1', hint: '空欄は既定値。文字数ではなく、応答生成に使うトークン数の上限です。' },
-    { key: 'rag_top_k' as const, label: '学内検索の取得件数（Top-k）', optional: false, step: '1', hint: '学内情報を検索する回答で使用します。' },
-    { key: 'rag_threshold' as const, label: '学内検索のスコア閾値', optional: false, step: '0.05', hint: '高いほど一致度の高い情報に絞ります。該当する情報が減ることがあります。' },
+    { key: 'temperature' as const, label: '応答の変化の大きさ（temperature）', optional: true, step: '0.1', hint: `${temperatureDefault} ${temperatureSupported ? '設定例：0.2で表現を控えめに、1.0で多様に。' : ''}`, placeholder: temperatureSupported ? (usesRag ? '会話AI 1.0／学内検索 0.7' : '1.0') : '変更不可' },
+    { key: 'max_tokens' as const, label: '生成トークン数の上限', optional: true, step: '1', hint: `${tokenDefault} 設定例：512から試し、回答が途中で切れる場合は1024以上へ増やします。文字数ではなく、モデルによっては内部の推論も含むトークン数です。`, placeholder: usesRag ? '会話AI 自動／学内検索 200' : '自動（数値の指定なし）' },
+    { key: 'rag_top_k' as const, label: '学内検索の取得件数（Top-k）', optional: false, step: '1', hint: `初期値：${catalog.defaults.rag_top_k}件。学内検索で参照する情報の件数です。`, placeholder: undefined },
+    { key: 'rag_threshold' as const, label: '学内検索のスコア閾値', optional: false, step: '0.05', hint: `初期値：${catalog.defaults.rag_threshold}。高いほど一致度の高い情報に絞り、低いほど広く検索します。`, placeholder: undefined },
   ]
   return (
     <>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 18 }}>{mode === 'assistant'
         ? '温度とトークン数は一般AIの回答に適用します。このモードでは学内検索を使いません。'
         : '温度とトークン数は親の会話AIと学内検索の回答に適用します。専門担当AIとフィラーは既定設定を使います。'}</p>
-      {fields.map(({ key, label, optional, step, hint }) => {
+      {fields.map(({ key, label, step, hint, placeholder }) => {
         const disabled = (key === 'temperature' && !temperatureSupported) || (mode === 'assistant' && key.startsWith('rag_'))
         return <label key={key} style={fieldStyle}>
           {label}
           <input type="number" inputMode={step === '1' ? 'numeric' : 'decimal'} aria-label={label}
             aria-invalid={!!errors[key]} aria-describedby={`hint-${key}`} min={catalog.limits[key].min} max={catalog.limits[key].max}
-            step={step} value={disabled ? '' : draft[key]} disabled={disabled} placeholder={optional ? '既定値を使用' : undefined}
+            step={step} value={disabled ? '' : draft[key]} disabled={disabled} placeholder={placeholder}
             style={{ ...inputStyle, opacity: disabled ? 0.55 : 1 }} onChange={(event) => onChange(key, event.target.value)} />
-          <span id={`hint-${key}`} style={hintStyle}>{hint}</span>
+          <span id={`hint-${key}`} style={hintStyle}>{hint} 設定範囲：{catalog.limits[key].min}〜{catalog.limits[key].max}。</span>
           {errors[key] && <span role="alert" style={{ color: '#fda4af' }}>{errors[key]}</span>}
         </label>
       })}
